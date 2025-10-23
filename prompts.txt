@@ -1,0 +1,79 @@
+prompts file - just for the user to use
+
+----------------------------------------------------------------------------------------
+
+Update error handling, status of the API call and use one standard for all error messages and succescful calls for Fintegrate APIs. Use this wrapper structure:
+
+"callStatus" - object for API call information.
+"statusCode" - API code, like 201
+"statusName" - API name, like Created
+"statusDescription" - description of call, if success, then constant "Success", if error, then error detailed explanation.
+
+Example of success case response for API POST: /customer/data:
+
+{
+    "data": {
+        "customer_id": "93fe20dd-031b-41f9-a989-e67220d41dd9",
+        "status": "ACTIVE",
+        "created_at": "2025-10-23T14:34:51.467162",
+    },
+    "callStatus": {
+        "statusCode": "201",
+        "statusName": "CREATED",
+        "statusDescription": "Success"
+    }
+}
+
+Example of error case response for API POST: /customer/data:
+{
+    "data": {},
+    "callStatus": {
+        "statusCode": "501",
+        "statusName": "NOT_IMPLEMENTED",
+        "statusDescription": "The server does not support the functionality required to fulfill the request."
+    }
+}
+
+Make changes to all three currently developed APIs.
+
+----------------------------------------------------------------------------------------
+
+PATCH /customer/change-status - if customer already in the status, that user wants to change, return error "Customer <uuid> already <status>" or similar (better phrased).
+
+Change callStatus object and parameter names to underscore instead of camelCase to keep unity between "data" and "call_status" objects. 
+
+----------------------------------------------------------------------------------------
+
+1. Change call_status object name to more standardized "detail". Do not change any other parameter names.
+
+2. Handle these kind of errors with standardized "status_code"M "status_name", "status_description":
+PATCH /customer/change-status
+{
+  "customer_id": "70c7ca5c-2ed8-4d3a-ad01-da794861e3d7",
+  "status": "japapa"
+}
+{
+    "detail": [
+        {
+            "type": "string_pattern_mismatch",
+            "loc": [
+                "body",
+                "status"
+            ],
+            "msg": "String should match pattern '^(ACTIVE|INACTIVE)$'",
+            "input": "japapa",
+            "ctx": {
+                "pattern": "^(ACTIVE|INACTIVE)$"
+            },
+            "url": "https://errors.pydantic.dev/2.5/v/string_pattern_mismatch"
+        }
+    ]
+}
+
+----------------------------------------------------------------------------------------
+
+----------------------------------------------------------------------------------------
+
+----------------------------------------------------------------------------------------
+
+----------------------------------------------------------------------------------------

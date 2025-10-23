@@ -1,0 +1,28 @@
+database:
+  host: ${DB_HOST}
+  port: ${DB_PORT}
+  name: ${DB_NAME}
+  user: ${DB_USER}
+  password: ${DB_PASSWORD}
+  pool_size: 5
+  max_overflow: 10
+
+api:
+  host: ${API_HOST}
+  port: ${API_PORT}
+  log_level: ${API_LOG_LEVEL}
+  cors_origins:
+    - "http://localhost:3000"
+    - "http://localhost:8000"
+
+logging:
+  version: 1
+  format: "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+  handlers:
+    - console
+    - file
+
+events:
+  enabled: false  # Enable when message broker ready
+  broker_type: rabbitmq
+  exchange: fintegrate_events
