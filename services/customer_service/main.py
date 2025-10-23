@@ -39,12 +39,32 @@ async def validation_exception_handler(request: Request, exc: RequestValidationE
     else:
         description = "Request validation failed"
     
+    error_resp = error_response(
+        status.HTTP_422_UNPROCESSABLE_ENTITY,
+        description
+    )
+    
+    # Log validation error to audit
+    from services.customer_service.database import SessionLocal
+    from services.shared.audit_logger import log_error_to_audit
+    import uuid
+    
+    db = SessionLocal()
+    try:
+        log_error_to_audit(
+            db=db,
+            request=request,
+            entity="validation",
+            entity_id=str(uuid.uuid4()),
+            action="validation_error",
+            error_response=error_resp
+        )
+    finally:
+        db.close()
+    
     return JSONResponse(
         status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-        content=error_response(
-            status.HTTP_422_UNPROCESSABLE_ENTITY,
-            description
-        )
+        content=error_resp
     )
 
 
