@@ -1,5 +1,12 @@
 prompts file - just for the user to use
 
+Re-read all context and instruction files (project-context.txt, database-context.txt, copilot-instructions.txt).
+Summarize your understanding of the system, database schema, and current implementation state.
+Identify inconsistencies or missing information across files.
+Re-synchronize your internal state and reasoning with the current project setup.
+From now on, base every step and answer on the definitions and constraints in these context files.
+Confirm readiness with a compact outline of key modules, tables, and API routes before proceeding.
+
 ----------------------------------------------------------------------------------------
 
 Update error handling, status of the API call and use one standard for all error messages and succescful calls for Fintegrate APIs. Use this wrapper structure:
@@ -69,6 +76,252 @@ PATCH /customer/change-status
         }
     ]
 }
+
+----------------------------------------------------------------------------------------
+
+Let's continue with "customer_events" table. There should be an entry registered upon these API calls with these event types and source services:
+POST: /customer/data | "customer_creation" | "POST: /customer/data"
+DELETE: /customer/data | "customer_deletion" | "DELETE: /customer/data"
+PATCH: /customer/change-status | "customer_status_change" | "PATCH: /customer/change-status"
+
+Other collumns should be filled accordingly.
+
+----------------------------------------------------------------------------------------
+
+Implement new API endpoints:
+POST: /customer/tag
+GET: /customer/tag-value
+DELETE: /customer/tag
+PATCH: /customer/tag-key
+PATCH: /customer/tag-value
+
+1. POST: /customer/tag
+IN customer_id, tag_keys (array), tag_values (array) --key and value position in array correspond to each other
+OUT detail (success), data object empty
+Request example:
+
+{
+  "customer_id": "c224e58b-9ac3-4c79-b5dd-64dffb3e4955",
+  "tag_keys": ["registration_code", "country"], --insert into "customer_tags.tag_key"
+  "tag_values": ["218753689", "UK"] --insert into "customer_tags.tag_value"
+}
+
+2. GET: /customer/tag-value
+IN customer_id, tag_key
+OUT tag_value
+Request example:
+{
+  "customer_id": "c224e58b-9ac3-4c79-b5dd-64dffb3e4955",
+  "tag_key": "registration_code"
+}
+Response example:
+{
+    "data": {
+        "tag_value": "218753689"
+    },
+    "detail": {
+        "status_code": "200",
+        "status_name": "OK",
+        "status_description": "Success"
+    }
+}
+
+3. DELETE: /customer/tag
+IN customer_id, tag_key
+OUT detail (success), data object empty
+Request example:
+{
+  "customer_id": "c224e58b-9ac3-4c79-b5dd-64dffb3e4955",
+  "tag_key": "registration_code"
+}
+
+4. PATCH: /customer/tag-key
+IN customer_id, tag_key, new_tag_key
+OUT detail (success), data object empty
+Request example:
+{
+  "customer_id": "c224e58b-9ac3-4c79-b5dd-64dffb3e4955",
+  "tag_key": "registration_code",
+  "new_tag_key": "registration_number"
+}
+
+5. PATCH: /customer/tag-value
+IN customer_id, tag_key, new_tag_value
+OUT detail (success), data object empty
+Request example:
+{
+  "customer_id": "c224e58b-9ac3-4c79-b5dd-64dffb3e4955",
+  "tag_key": "registration_code",
+  "new_tag_value": "458773691"
+}
+
+Additionally, Update endpoint GET: /customer/data response - include tags object. Return tags as JSON object with "key":"value" pairs.
+New response example:
+{
+    "data": {
+        "customer_id": "c224e58b-9ac3-4c79-b5dd-64dffb3e4955",
+        "name": "John Williams Doe",
+        "status": "ACTIVE",
+        "created_at": "2025-10-23T21:16:06.741020",
+        "updated_at": "2025-10-23T21:16:37.273807",
+        "tags": {
+            "registration_code": "218753689",
+            "country": "UK"
+        }
+    },
+    "detail": {
+        "status_code": "200",
+        "status_name": "OK",
+        "status_description": "Success"
+    }
+}
+
+----------------------------------------------------------------------------------------
+
+Create new DB migration file with SQL commands for these changes:
+1. Add "updated_at" collumn in the table "customer_tags"
+2. Update table "analytics_customers" name to "customer_analytics"
+
+A. Update related API calls accordingly to these DB migration changes.
+B. Update GET: /customer/data response to return tags in "tags" object alphabetically by "tag_key"
+
+----------------------------------------------------------------------------------------
+
+Create new API endpoint POST: /customer/analytics
+IN customer_id
+OUT detail (success), data object empty
+
+This API creates a snapshot of analytics info in "customer_analytics" table.
+There can be multiple entries in "customer_analytics" table for the same customer.
+The idea is to have timelapsed info of customer data and be able to do analysis of how data changed for particular customer.
+
+----------------------------------------------------------------------------------------
+
+Let's focus on this flow:
+POST /customer/data:
+  1. Validate input
+  2. Write to customers table
+  3. Write to customer_events table
+  4. Publish message to RabbitMQ exchange
+  5. Return HTTP 201
+
+Let's discuss:
+1. Is there going to be UI for RabbitMQ for me to physically see messages in the queue (similar to ActiveMQ console)?
+2. Does the consumer (client side) has to trigger (GET) the message from the queue or is it send automatically?
+3. I would like to focus on one thing at a time. My idea is to send a push notification to the client system via RabbitMQ in JSON or XML format. In case of putting a message "customer.created" in RabbitMQ, do I have to prepare a client side emulator to take and parse that message?
+
+----------------------------------------------------------------------------------------
+
+Current plan is this:
+1. Add RabbitMQ to Docker Compose
+2. Modify POST /customer/data to publish message after DB write
+3. Create simple consumer script that prints messages to console
+4. Verify flow: API call → RabbitMQ UI shows message → Consumer prints message → Message disappears from queue
+
+I suggest this structure to the customer creation event push notification:
+{
+    "event_id": "5e789704-3704-44aa-a0b6-b2c5a2762f71",
+    "event_type": "customer_creation",
+    "data": {
+        "name": "John Richard Doe", 
+        "status": "ACTIVE", 
+        "customer_id": "39e1fdb9-419b-4b55-b3f4-1e958c221aa0"
+    },
+    "metadata": {
+        "created_at": "2025-10-23T21:01:14.497319"
+    }
+}
+All values are taken from "customer_events" table. This is for step 3 I suppose.
+
+Let's start with the implementation of step 1 - Add RabbitMQ to Docker Compose.
+
+----------------------------------------------------------------------------------------
+
+This TC got me thinking:
+
+Publisher Failure Handling
+1. Stop RabbitMQ: docker stop fintegrate-rabbitmq
+2. POST /customer/data → Should succeed (non-blocking), customer in DB
+3. Check uvicorn logs: "RabbitMQ publish failed"
+4. Restart RabbitMQ: docker start fintegrate-rabbitmq
+
+Currently, if RabbitMQ publish result: False, after Rabbit Docker restart this push notification is not published and consequently not delivered to the consumer.
+I am thinking of a solution:
+1. Update table "consumer_events" - add new column "publish_status": "not_published"/"published". Add another new column "published_at" to indicate time of succesful publishing.
+2. Create auto JOB to scan "consumer_events" table every 5 minutes or so to check if there are "not_published" events.
+3. If there are "not_published" events then try to publish them into RabbitMQ queue.
+
+Do not code yet. Act as an integration Architect and present your thinking and suggestions on this issue.
+
+----------------------------------------------------------------------------------------
+
+Let's continue discussing with these pattern options:
+Pattern 1: Transactional Outbox (Industry Standard)
+Pattern 4: At-Least-Once with Idempotency (Pragmatic)
+
+We have to choose one for this phase. Let's not talk about next phases as I will learn auto JOBs separately - for now let's just focus on the problem at hand.
+
+Please compare Pattern 1 and Pattern 4. Explain concept of idempotency clearer and with example - I am not familiar with this concept.
+Do not code, let's just discuss.
+
+----------------------------------------------------------------------------------------
+
+I would like to stay with Pattern 1: Transactional Outbox (Industry Standard). My thinking and workaround for background worker and DB overhead:
+1. I would prefer Guaranteed delivery and no Data loss risk.
+2. Background worker will not be needed - I will suggest creating additional API call POST: /events/resend
+3. POST: /events/resend - IN period_in_days, OUT only details, success. This API triggers once a DB command to check for unpublished events and tries to publish them once and that's it. Param "period_in_days" indicates how old events should be retried sending (check on "customer_events.created_at") - to limit traversing all table.
+4. This API call will be used rarely by Fintegrate system admins.
+5. Event should be published once during POST: /customer/data call (as it works right now). If failure, then "publish_status" remains on pending.
+5. I did not like the idea of consumer having access to server DB regarding Pattern 4: At-Least-Once + Idempotency Solution.
+
+Changes needed:
+1. Create API POST: /events/resend
+2. Update DB table Update table "consumer_events" - add new columns:
+- "publish_status": "pending"/"published";
+- "published_at" - to indicate time of successful publishing.
+- "retry_count" - original/initial value 0, when retried with POST: /events/resend, then +1
+- "last_retried_at" - to indicate time of last retry
+3. Upon calling POST: /events/resend, query related events (where created_at > current_date - period_in_days AND publish_status=pending)
+4. POST: /events/resend will be used in the future for all kinds of events.
+
+Do not code, just present your view on this solution as integration architect.
+
+----------------------------------------------------------------------------------------
+
+So, the changes needed at this point:
+1. Create API POST: /events/resend
+IN "period_in_days", "max_try_count" (Optional: Skip events already retried 3+ times), "event_types" (array) (Optional: Filter by event types)
+OUT data.summary (object), inside summary object: "total_pending", "attempted", "succeeded", "failed", "skipped", data.failed_events (object), inside failed_events object (array of failed events): "event_id", "event_type", "try_count", "failure_reason".
+
+2. Update DB table Update table "consumer_events" - add new columns:
+- "publish_status": "pending"/"published"/"failed"; --if try_count == 10, then consider event lost and not needed anymore, i.e. publish_status=failed
+- "published_at" - to indicate time of successful publishing.
+- "publish_try_count" - original/initial value 1, when retried with POST: /events/resend, then +1
+- "last_tried_at" - to indicate time of last retry
+- "failure_reason" - NEW: Store pika exception detail
+
+3. Upon calling POST: /events/resend, query related events (where created_at > current_date - period_in_days AND publish_status=pending AND publish_try_count < max_try_count (if provided) AND event_type == event_types (if provided))
+
+4. Create API GET: /events/health
+IN no Parameters
+OUT "pending_count", "oldest_pending_age_hours", "failed_count"
+
+5. Make change to POST: /customer/data - if initial publish try is unsuccsessful, then:
+- publish_status    = pending;
+- published_at      = null;
+- publish_try_count = 1; --to indicate that initial try to publish was done
+- last_tried_at     = [current_date];
+- failure_reason    = [error message from Rabbit/PIKA].
+
+----------------------------------------------------------------------------------------
+
+----------------------------------------------------------------------------------------
+
+----------------------------------------------------------------------------------------
+
+----------------------------------------------------------------------------------------
+
+----------------------------------------------------------------------------------------
 
 ----------------------------------------------------------------------------------------
 

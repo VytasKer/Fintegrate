@@ -4,20 +4,34 @@ from fastapi.exceptions import RequestValidationError
 from sqlalchemy.orm import Session
 from uuid import UUID
 import uuid
+from datetime import datetime
 from services.customer_service.database import get_db
 from services.customer_service.schemas import (
     CustomerCreate, 
     CustomerCreateResponse, 
     CustomerResponse,
     CustomerStatusChange,
+    CustomerTagCreate,
+    CustomerTagGet,
+    CustomerTagGetResponse,
+    CustomerTagDelete,
+    CustomerTagKeyUpdate,
+    CustomerTagValueUpdate,
+    CustomerAnalyticsCreate,
     CustomerCreateStandardResponse,
     CustomerGetStandardResponse,
     CustomerDeleteStandardResponse,
-    CustomerStatusChangeStandardResponse
+    CustomerStatusChangeStandardResponse,
+    CustomerTagStandardResponse,
+    CustomerTagGetStandardResponse,
+    EventResendRequest,
+    EventResendStandardResponse,
+    EventHealthStandardResponse
 )
 from services.customer_service import crud
 from services.shared.response_handler import success_response, error_response
 from services.shared.audit_logger import log_error_to_audit
+from services.shared.event_publisher import get_event_publisher
 
 router = APIRouter()
 
@@ -34,8 +48,8 @@ def create_customer(customer: CustomerCreate, request: Request, db: Session = De
     try:
         db_customer = crud.create_customer(db, customer)
         
-        # Create event entry
-        crud.create_customer_event(
+        # Create event entry first with 'pending' status (outbox pattern)
+        event = crud.create_customer_event(
             db=db,
             customer_id=db_customer.customer_id,
             event_type="customer_creation",
@@ -47,8 +61,54 @@ def create_customer(customer: CustomerCreate, request: Request, db: Session = De
             },
             metadata={
                 "created_at": db_customer.created_at.isoformat()
-            }
+            },
+            publish_status="pending",  # Default to pending
+            published_at=None,
+            publish_try_count=1,
+            last_tried_at=datetime.utcnow(),
+            failure_reason=None
         )
+        
+        # Now try to publish to RabbitMQ
+        publish_success = False
+        try:
+            print(f"Attempting to publish event {event.event_id}: customer.creation for customer {db_customer.customer_id}")
+            publisher = get_event_publisher()
+            if publisher:
+                publish_success = publisher.publish_event(
+                    event_id=event.event_id,  # Use the event_id from DB
+                    event_type="customer_creation",
+                    customer_id=db_customer.customer_id,
+                    name=db_customer.name,
+                    status=db_customer.status,
+                    created_at=event.created_at
+                )
+                
+                if publish_success:
+                    # Update event record - successfully published
+                    event.publish_status = "published"
+                    event.published_at = datetime.utcnow()
+                    event.failure_reason = None
+                    db.commit()
+                    print(f"RabbitMQ publish successful, event marked as published")
+                else:
+                    # Update failure reason
+                    event.failure_reason = "RabbitMQ publish returned False"
+                    db.commit()
+                    print(f"RabbitMQ publish failed: {event.failure_reason}")
+            else:
+                # Update failure reason
+                event.failure_reason = "EventPublisher connection is None"
+                db.commit()
+                print(f"Publisher is None - RabbitMQ connection failed")
+                
+        except Exception as mq_error:
+            # Update failure reason
+            event.failure_reason = f"{type(mq_error).__name__}: {str(mq_error)}"
+            db.commit()
+            print(f"RabbitMQ publish exception (non-blocking): {event.failure_reason}")
+            import traceback
+            traceback.print_exc()
         
         response_data = CustomerCreateResponse(
             customer_id=db_customer.customer_id,
@@ -85,7 +145,7 @@ def get_customer(customer_id: UUID, request: Request, db: Session = Depends(get_
     
     - **customer_id**: UUID of the customer (query parameter)
     
-    Returns: Standardized response with customer_id, name, status, created_at, updated_at
+    Returns: Standardized response with customer_id, name, status, created_at, updated_at, tags
     """
     try:
         db_customer = crud.get_customer(db, customer_id)
@@ -110,12 +170,18 @@ def get_customer(customer_id: UUID, request: Request, db: Session = Depends(get_
                 content=error_resp
             )
         
+        # Get customer tags
+        customer_tags = crud.get_customer_tags(db, customer_id)
+        # Sort tags alphabetically by tag_key
+        tags_dict = {tag.tag_key: tag.tag_value for tag in sorted(customer_tags, key=lambda t: t.tag_key)}
+        
         response_data = CustomerResponse(
             customer_id=db_customer.customer_id,
             name=db_customer.name,
             status=db_customer.status,
             created_at=db_customer.created_at,
-            updated_at=db_customer.updated_at
+            updated_at=db_customer.updated_at,
+            tags=tags_dict
         )
         return success_response(response_data.model_dump(), status.HTTP_200_OK)
     except Exception as e:
@@ -138,6 +204,195 @@ def get_customer(customer_id: UUID, request: Request, db: Session = Depends(get_
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             content=error_resp
         )
+
+
+@router.post("/customer/tag", response_model=CustomerTagStandardResponse, status_code=status.HTTP_201_CREATED)
+def create_customer_tags(tag_data: CustomerTagCreate, request: Request, db: Session = Depends(get_db)):
+    """
+    Create multiple tags for a customer.
+    
+    - **customer_id**: UUID of the customer
+    - **tag_keys**: List of tag keys
+    - **tag_values**: List of tag values (positional correspondence with keys)
+    
+    Returns: Standardized response
+    """
+    try:
+        # Validate customer exists
+        db_customer = crud.get_customer(db, tag_data.customer_id)
+        if not db_customer:
+            error_resp = error_response(
+                status.HTTP_404_NOT_FOUND,
+                f"Customer with id {tag_data.customer_id} not found"
+            )
+            log_error_to_audit(db, request, "customer_tag", tag_data.customer_id, "create_tags", error_resp)
+            return JSONResponse(status_code=status.HTTP_404_NOT_FOUND, content=error_resp)
+        
+        # Validate arrays have same length
+        if len(tag_data.tag_keys) != len(tag_data.tag_values):
+            error_resp = error_response(
+                status.HTTP_400_BAD_REQUEST,
+                "tag_keys and tag_values arrays must have the same length"
+            )
+            log_error_to_audit(db, request, "customer_tag", tag_data.customer_id, "create_tags", error_resp)
+            return JSONResponse(status_code=status.HTTP_400_BAD_REQUEST, content=error_resp)
+        
+        # Create tags
+        for key, value in zip(tag_data.tag_keys, tag_data.tag_values):
+            crud.create_customer_tag(db, tag_data.customer_id, key, value)
+        
+        return success_response({}, status.HTTP_201_CREATED)
+    except Exception as e:
+        error_resp = error_response(status.HTTP_500_INTERNAL_SERVER_ERROR, f"Failed to create tags: {str(e)}")
+        log_error_to_audit(db, request, "customer_tag", tag_data.customer_id, "create_tags", error_resp)
+        return JSONResponse(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, content=error_resp)
+
+
+@router.get("/customer/tag-value", response_model=CustomerTagGetStandardResponse)
+def get_customer_tag_value(customer_id: UUID, tag_key: str, request: Request, db: Session = Depends(get_db)):
+    """
+    Retrieve tag value for a customer by tag key.
+    
+    - **customer_id**: UUID of the customer (query parameter)
+    - **tag_key**: Tag key (query parameter)
+    
+    Returns: Tag value
+    """
+    try:
+        db_tag = crud.get_customer_tag(db, customer_id, tag_key)
+        if not db_tag:
+            error_resp = error_response(
+                status.HTTP_404_NOT_FOUND,
+                f"Tag '{tag_key}' not found for customer {customer_id}"
+            )
+            log_error_to_audit(db, request, "customer_tag", customer_id, "get_tag_value", error_resp)
+            return JSONResponse(status_code=status.HTTP_404_NOT_FOUND, content=error_resp)
+        
+        response_data = CustomerTagGetResponse(tag_value=db_tag.tag_value)
+        return success_response(response_data.model_dump(), status.HTTP_200_OK)
+    except Exception as e:
+        error_resp = error_response(status.HTTP_500_INTERNAL_SERVER_ERROR, f"Failed to retrieve tag: {str(e)}")
+        log_error_to_audit(db, request, "customer_tag", customer_id, "get_tag_value", error_resp)
+        return JSONResponse(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, content=error_resp)
+
+
+@router.delete("/customer/tag", response_model=CustomerTagStandardResponse, status_code=status.HTTP_200_OK)
+def delete_customer_tag(tag_delete: CustomerTagDelete, request: Request, db: Session = Depends(get_db)):
+    """
+    Delete a tag for a customer.
+    
+    - **customer_id**: UUID of the customer
+    - **tag_key**: Tag key to delete
+    
+    Returns: Standardized response
+    """
+    try:
+        deleted = crud.delete_customer_tag(db, tag_delete.customer_id, tag_delete.tag_key)
+        if not deleted:
+            error_resp = error_response(
+                status.HTTP_404_NOT_FOUND,
+                f"Tag '{tag_delete.tag_key}' not found for customer {tag_delete.customer_id}"
+            )
+            log_error_to_audit(db, request, "customer_tag", tag_delete.customer_id, "delete_tag", error_resp)
+            return JSONResponse(status_code=status.HTTP_404_NOT_FOUND, content=error_resp)
+        
+        return success_response({}, status.HTTP_200_OK)
+    except Exception as e:
+        error_resp = error_response(status.HTTP_500_INTERNAL_SERVER_ERROR, f"Failed to delete tag: {str(e)}")
+        log_error_to_audit(db, request, "customer_tag", tag_delete.customer_id, "delete_tag", error_resp)
+        return JSONResponse(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, content=error_resp)
+
+
+@router.patch("/customer/tag-key", response_model=CustomerTagStandardResponse, status_code=status.HTTP_200_OK)
+def update_customer_tag_key(tag_update: CustomerTagKeyUpdate, request: Request, db: Session = Depends(get_db)):
+    """
+    Update tag key for a customer.
+    
+    - **customer_id**: UUID of the customer
+    - **tag_key**: Current tag key
+    - **new_tag_key**: New tag key
+    
+    Returns: Standardized response
+    """
+    try:
+        updated_tag = crud.update_customer_tag_key(db, tag_update.customer_id, tag_update.tag_key, tag_update.new_tag_key)
+        if not updated_tag:
+            error_resp = error_response(
+                status.HTTP_404_NOT_FOUND,
+                f"Tag '{tag_update.tag_key}' not found for customer {tag_update.customer_id}"
+            )
+            log_error_to_audit(db, request, "customer_tag", tag_update.customer_id, "update_tag_key", error_resp)
+            return JSONResponse(status_code=status.HTTP_404_NOT_FOUND, content=error_resp)
+        
+        return success_response({}, status.HTTP_200_OK)
+    except Exception as e:
+        error_resp = error_response(status.HTTP_500_INTERNAL_SERVER_ERROR, f"Failed to update tag key: {str(e)}")
+        log_error_to_audit(db, request, "customer_tag", tag_update.customer_id, "update_tag_key", error_resp)
+        return JSONResponse(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, content=error_resp)
+
+
+@router.patch("/customer/tag-value", response_model=CustomerTagStandardResponse, status_code=status.HTTP_200_OK)
+def update_customer_tag_value(tag_update: CustomerTagValueUpdate, request: Request, db: Session = Depends(get_db)):
+    """
+    Update tag value for a customer.
+    
+    - **customer_id**: UUID of the customer
+    - **tag_key**: Tag key
+    - **new_tag_value**: New tag value
+    
+    Returns: Standardized response
+    """
+    try:
+        updated_tag = crud.update_customer_tag_value(db, tag_update.customer_id, tag_update.tag_key, tag_update.new_tag_value)
+        if not updated_tag:
+            error_resp = error_response(
+                status.HTTP_404_NOT_FOUND,
+                f"Tag '{tag_update.tag_key}' not found for customer {tag_update.customer_id}"
+            )
+            log_error_to_audit(db, request, "customer_tag", tag_update.customer_id, "update_tag_value", error_resp)
+            return JSONResponse(status_code=status.HTTP_404_NOT_FOUND, content=error_resp)
+        
+        return success_response({}, status.HTTP_200_OK)
+    except Exception as e:
+        error_resp = error_response(status.HTTP_500_INTERNAL_SERVER_ERROR, f"Failed to update tag value: {str(e)}")
+        log_error_to_audit(db, request, "customer_tag", tag_update.customer_id, "update_tag_value", error_resp)
+        return JSONResponse(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, content=error_resp)
+
+
+@router.post("/customer/analytics", response_model=CustomerTagStandardResponse, status_code=status.HTTP_201_CREATED)
+def create_customer_analytics(analytics_data: CustomerAnalyticsCreate, request: Request, db: Session = Depends(get_db)):
+    """
+    Create an analytics snapshot for a customer.
+    
+    Captures time-lapsed data including:
+    - Customer info (name, status, created_at)
+    - Event statistics (total_events, last_event_time)
+    - Tags snapshot (tags_json)
+    - Calculated metrics (metrics_json)
+    
+    Multiple snapshots can exist for the same customer to enable trend analysis.
+    
+    - **customer_id**: UUID of the customer
+    
+    Returns: Standardized response with empty data object
+    """
+    try:
+        # Create analytics snapshot (this validates customer exists)
+        crud.create_customer_analytics_snapshot(db, analytics_data.customer_id)
+        
+        return success_response({}, status.HTTP_201_CREATED)
+    except ValueError as e:
+        # Customer not found
+        error_resp = error_response(
+            status.HTTP_404_NOT_FOUND,
+            str(e)
+        )
+        log_error_to_audit(db, request, "customer_analytics", analytics_data.customer_id, "create_snapshot", error_resp)
+        return JSONResponse(status_code=status.HTTP_404_NOT_FOUND, content=error_resp)
+    except Exception as e:
+        error_resp = error_response(status.HTTP_500_INTERNAL_SERVER_ERROR, f"Failed to create analytics snapshot: {str(e)}")
+        log_error_to_audit(db, request, "customer_analytics", analytics_data.customer_id, "create_snapshot", error_resp)
+        return JSONResponse(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, content=error_resp)
 
 
 @router.delete("/customer/data", response_model=CustomerDeleteStandardResponse, status_code=status.HTTP_200_OK)
@@ -209,8 +464,8 @@ def delete_customer(customer_id: UUID, request: Request, db: Session = Depends(g
             trigger_event="customer_deletion"
         )
         
-        # Step 4: Log deletion event
-        crud.create_customer_event(
+        # Step 4: Create event entry first with 'pending' status (outbox pattern)
+        event = crud.create_customer_event(
             db=db,
             customer_id=customer_id,
             event_type="customer_deletion",
@@ -224,13 +479,53 @@ def delete_customer(customer_id: UUID, request: Request, db: Session = Depends(g
             metadata={
                 "deleted_at": db_customer.updated_at.isoformat(),
                 "archived": True
-            }
+            },
+            publish_status="pending",
+            published_at=None,
+            publish_try_count=1,
+            last_tried_at=datetime.utcnow(),
+            failure_reason=None
         )
         
-        # Step 5: Delete tags
+        # Step 5: Try to publish to RabbitMQ
+        try:
+            print(f"Attempting to publish event {event.event_id}: customer.deletion for customer {customer_id}")
+            publisher = get_event_publisher()
+            if publisher:
+                publish_success = publisher.publish_event(
+                    event_id=event.event_id,
+                    event_type="customer_deletion",
+                    customer_id=customer_id,
+                    name=db_customer.name,
+                    status=db_customer.status,
+                    created_at=event.created_at
+                )
+                
+                if publish_success:
+                    event.publish_status = "published"
+                    event.published_at = datetime.utcnow()
+                    event.failure_reason = None
+                    db.commit()
+                    print(f"RabbitMQ publish successful, event marked as published")
+                else:
+                    event.failure_reason = "RabbitMQ publish returned False"
+                    db.commit()
+                    print(f"RabbitMQ publish failed: {event.failure_reason}")
+            else:
+                event.failure_reason = "EventPublisher connection is None"
+                db.commit()
+                print(f"Publisher is None - RabbitMQ connection failed")
+        except Exception as mq_error:
+            event.failure_reason = f"{type(mq_error).__name__}: {str(mq_error)}"
+            db.commit()
+            print(f"RabbitMQ publish exception (non-blocking): {event.failure_reason}")
+            import traceback
+            traceback.print_exc()
+        
+        # Step 6: Delete tags
         tags_deleted = crud.delete_customer_tags(db, customer_id)
         
-        # Step 6: Delete customer
+        # Step 7: Delete customer
         crud.delete_customer(db, customer_id)
         
         return success_response(
@@ -325,8 +620,11 @@ def change_customer_status(status_change: CustomerStatusChange, request: Request
         # Update status
         crud.update_customer_status(db, status_change.customer_id, status_change.status)
         
-        # Create event entry
-        crud.create_customer_event(
+        # Refresh to get updated timestamp
+        db.refresh(db_customer)
+        
+        # Create event entry first with 'pending' status (outbox pattern)
+        event = crud.create_customer_event(
             db=db,
             customer_id=status_change.customer_id,
             event_type="customer_status_change",
@@ -338,8 +636,48 @@ def change_customer_status(status_change: CustomerStatusChange, request: Request
             },
             metadata={
                 "changed_at": db_customer.updated_at.isoformat()
-            }
+            },
+            publish_status="pending",
+            published_at=None,
+            publish_try_count=1,
+            last_tried_at=datetime.utcnow(),
+            failure_reason=None
         )
+        
+        # Try to publish to RabbitMQ
+        try:
+            print(f"Attempting to publish event {event.event_id}: customer.status.change for customer {status_change.customer_id}")
+            publisher = get_event_publisher()
+            if publisher:
+                publish_success = publisher.publish_event(
+                    event_id=event.event_id,
+                    event_type="customer_status_change",
+                    customer_id=status_change.customer_id,
+                    name=db_customer.name,
+                    status=status_change.status,
+                    created_at=event.created_at
+                )
+                
+                if publish_success:
+                    event.publish_status = "published"
+                    event.published_at = datetime.utcnow()
+                    event.failure_reason = None
+                    db.commit()
+                    print(f"RabbitMQ publish successful, event marked as published")
+                else:
+                    event.failure_reason = "RabbitMQ publish returned False"
+                    db.commit()
+                    print(f"RabbitMQ publish failed: {event.failure_reason}")
+            else:
+                event.failure_reason = "EventPublisher connection is None"
+                db.commit()
+                print(f"Publisher is None - RabbitMQ connection failed")
+        except Exception as mq_error:
+            event.failure_reason = f"{type(mq_error).__name__}: {str(mq_error)}"
+            db.commit()
+            print(f"RabbitMQ publish exception (non-blocking): {event.failure_reason}")
+            import traceback
+            traceback.print_exc()
         
         return success_response({}, status.HTTP_200_OK)
     except Exception as e:
@@ -358,6 +696,216 @@ def change_customer_status(status_change: CustomerStatusChange, request: Request
             error_response=error_resp
         )
         
+        return JSONResponse(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            content=error_resp
+        )
+
+
+@router.post("/events/resend", response_model=EventResendStandardResponse, status_code=status.HTTP_200_OK)
+def resend_pending_events(resend_request: EventResendRequest, request: Request, db: Session = Depends(get_db)):
+    """
+    Resend pending events to RabbitMQ (Transactional Outbox Pattern).
+    
+    - **period_in_days**: Search for events created within this many days (1-365)
+    - **max_try_count**: Optional - Skip events that exceeded this retry count
+    - **event_types**: Optional - Filter by specific event types
+    
+    Returns: Summary of resend operation with failed event details
+    """
+    try:
+        from datetime import timedelta
+        from services.customer_service.models import CustomerEvent
+        from sqlalchemy import and_
+        
+        # Calculate cutoff date
+        cutoff_date = datetime.utcnow() - timedelta(days=resend_request.period_in_days)
+        
+        # Build query filters
+        filters = [
+            CustomerEvent.created_at > cutoff_date,
+            CustomerEvent.publish_status == 'pending'
+        ]
+        
+        if resend_request.max_try_count is not None:
+            filters.append(CustomerEvent.publish_try_count < resend_request.max_try_count)
+        
+        if resend_request.event_types:
+            filters.append(CustomerEvent.event_type.in_(resend_request.event_types))
+        
+        # Query pending events
+        pending_events = db.query(CustomerEvent).filter(and_(*filters)).all()
+        
+        # Initialize counters
+        total_pending = len(pending_events)
+        attempted = 0
+        succeeded = 0
+        failed = 0
+        skipped = 0
+        failed_events_list = []
+        
+        # Get publisher
+        publisher = get_event_publisher()
+        
+        if not publisher:
+            # If RabbitMQ is completely unavailable, return early
+            from services.customer_service.schemas import EventResendResponseData, EventResendSummary
+            response_data = EventResendResponseData(
+                summary=EventResendSummary(
+                    total_pending=total_pending,
+                    attempted=0,
+                    succeeded=0,
+                    failed=0,
+                    skipped=total_pending
+                ),
+                failed_events=[]
+            )
+            return success_response(response_data.model_dump(), status.HTTP_200_OK)
+        
+        # Attempt to republish each event
+        for event in pending_events:
+            # Check if should skip (max retry exceeded after query due to race conditions)
+            if resend_request.max_try_count and event.publish_try_count >= resend_request.max_try_count:
+                skipped += 1
+                continue
+            
+            attempted += 1
+            publish_success = False
+            failure_reason = None
+            
+            try:
+                # Extract data from payload
+                payload = event.payload_json
+                customer_id = UUID(payload.get("customer_id"))
+                name = payload.get("name")
+                status_val = payload.get("status")
+                
+                # Publish to RabbitMQ
+                publish_success = publisher.publish_event(
+                    event_id=event.event_id,
+                    event_type=event.event_type,
+                    customer_id=customer_id,
+                    name=name,
+                    status=status_val,
+                    created_at=event.created_at
+                )
+                
+                if publish_success:
+                    # Update event record - successfully published
+                    event.publish_status = 'published'
+                    event.published_at = datetime.utcnow()
+                    event.publish_try_count += 1
+                    event.last_tried_at = datetime.utcnow()
+                    event.failure_reason = None
+                    succeeded += 1
+                else:
+                    failure_reason = "RabbitMQ publish returned False"
+                    
+            except Exception as publish_error:
+                failure_reason = f"{type(publish_error).__name__}: {str(publish_error)}"
+            
+            # If publishing failed, update record
+            if not publish_success:
+                event.publish_try_count += 1
+                event.last_tried_at = datetime.utcnow()
+                event.failure_reason = failure_reason
+                
+                # Mark as permanently failed if exceeded max retries (10)
+                if event.publish_try_count >= 10:
+                    event.publish_status = 'failed'
+                
+                failed += 1
+                
+                # Add to failed events list
+                from services.customer_service.schemas import EventResendFailedEvent
+                failed_events_list.append(
+                    EventResendFailedEvent(
+                        event_id=event.event_id,
+                        event_type=event.event_type,
+                        try_count=event.publish_try_count,
+                        failure_reason=failure_reason
+                    )
+                )
+        
+        # Commit all updates
+        db.commit()
+        
+        # Build response
+        from services.customer_service.schemas import EventResendResponseData, EventResendSummary
+        response_data = EventResendResponseData(
+            summary=EventResendSummary(
+                total_pending=total_pending,
+                attempted=attempted,
+                succeeded=succeeded,
+                failed=failed,
+                skipped=skipped
+            ),
+            failed_events=failed_events_list
+        )
+        
+        return success_response(response_data.model_dump(), status.HTTP_200_OK)
+        
+    except Exception as e:
+        error_resp = error_response(
+            status.HTTP_500_INTERNAL_SERVER_ERROR,
+            f"Failed to resend events: {str(e)}"
+        )
+        return JSONResponse(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            content=error_resp
+        )
+
+
+@router.get("/events/health", response_model=EventHealthStandardResponse, status_code=status.HTTP_200_OK)
+def get_events_health(request: Request, db: Session = Depends(get_db)):
+    """
+    Get health status of event publishing system.
+    
+    Returns:
+    - **pending_count**: Number of events waiting to be published
+    - **oldest_pending_age_seconds**: Age in seconds of the oldest pending event
+    - **failed_count**: Number of permanently failed events (exceeded max retries)
+    """
+    try:
+        from services.customer_service.models import CustomerEvent
+        from sqlalchemy import func
+        
+        # Count pending events
+        pending_count = db.query(CustomerEvent).filter(
+            CustomerEvent.publish_status == 'pending'
+        ).count()
+        
+        # Find oldest pending event
+        oldest_pending = db.query(func.min(CustomerEvent.created_at)).filter(
+            CustomerEvent.publish_status == 'pending'
+        ).scalar()
+        
+        # Calculate age in seconds
+        oldest_pending_age_seconds = None
+        if oldest_pending:
+            age_delta = datetime.utcnow() - oldest_pending
+            oldest_pending_age_seconds = round(age_delta.total_seconds(), 2)
+        
+        # Count failed events
+        failed_count = db.query(CustomerEvent).filter(
+            CustomerEvent.publish_status == 'failed'
+        ).count()
+        
+        # Build response
+        from services.customer_service.schemas import EventHealthResponseData
+        response_data = EventHealthResponseData(
+            pending_count=pending_count,
+            oldest_pending_age_seconds=oldest_pending_age_seconds,
+            failed_count=failed_count
+        )
+        
+        return success_response(response_data.model_dump(), status.HTTP_200_OK)
+        
+    except Exception as e:
+        error_resp = error_response(
+            status.HTTP_500_INTERNAL_SERVER_ERROR,
+            f"Failed to get events health: {str(e)}"
+        )
         return JSONResponse(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             content=error_resp

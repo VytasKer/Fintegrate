@@ -1,4 +1,4 @@
-from sqlalchemy import Column, String, TIMESTAMP
+from sqlalchemy import Column, String, TIMESTAMP, Integer
 from sqlalchemy.dialects.postgresql import UUID, JSONB
 from sqlalchemy.sql import func
 import uuid
@@ -25,6 +25,13 @@ class CustomerEvent(Base):
     payload_json = Column(JSONB, nullable=False)
     metadata_json = Column(JSONB)
     created_at = Column(TIMESTAMP, nullable=False, server_default=func.current_timestamp())
+    
+    # Transactional Outbox Pattern columns
+    publish_status = Column(String(20), nullable=False, default="published")  # 'pending', 'published', 'failed'
+    published_at = Column(TIMESTAMP, nullable=True)
+    publish_try_count = Column(Integer, nullable=False, default=1)
+    last_tried_at = Column(TIMESTAMP, nullable=True)
+    failure_reason = Column(String, nullable=True)  # Stores pika exception details
 
 
 class CustomerTag(Base):
@@ -35,6 +42,7 @@ class CustomerTag(Base):
     tag_key = Column(String(100), nullable=False)
     tag_value = Column(String(255))
     created_at = Column(TIMESTAMP, nullable=False, server_default=func.current_timestamp())
+    updated_at = Column(TIMESTAMP, nullable=False, server_default=func.current_timestamp(), onupdate=func.current_timestamp())
 
 
 class CustomerArchive(Base):
@@ -59,3 +67,19 @@ class AuditLog(Base):
     request_json = Column(JSONB)
     response_json = Column(JSONB)
     timestamp = Column(TIMESTAMP, nullable=False, server_default=func.current_timestamp())
+
+
+class CustomerAnalytics(Base):
+    """CustomerAnalytics model for analytics snapshots and time-series analysis."""
+    __tablename__ = "customer_analytics"
+    
+    analytics_id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    customer_id = Column(UUID(as_uuid=True), nullable=False)
+    name = Column(String(255))
+    status = Column(String(50))
+    created_at = Column(TIMESTAMP)
+    last_event_time = Column(TIMESTAMP)
+    total_events = Column(Integer, default=0)
+    tags_json = Column(JSONB)
+    metrics_json = Column(JSONB)
+    snapshot_at = Column(TIMESTAMP, nullable=False, server_default=func.current_timestamp())

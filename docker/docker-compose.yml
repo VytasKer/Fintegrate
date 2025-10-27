@@ -1,2 +1,41 @@
 # Docker Compose Configuration
-# Phase 4: DevOps - Containerization
+# Phase 2: Core Integration - Message Queue
+
+version: '3.8'
+
+services:
+  postgres:
+    image: postgres:15-alpine
+    container_name: fintegrate-postgres
+    environment:
+      POSTGRES_DB: fintegrate_db
+      POSTGRES_USER: fintegrate_user
+      POSTGRES_PASSWORD: fintegrate_pass
+    ports:
+      - "5435:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    networks:
+      - fintegrate-network
+
+  rabbitmq:
+    image: rabbitmq:3.12-management-alpine
+    container_name: fintegrate-rabbitmq
+    environment:
+      RABBITMQ_DEFAULT_USER: fintegrate_user
+      RABBITMQ_DEFAULT_PASS: fintegrate_pass
+    ports:
+      - "5672:5672"   # AMQP protocol
+      - "15672:15672" # Management UI
+    volumes:
+      - rabbitmq_data:/var/lib/rabbitmq
+    networks:
+      - fintegrate-network
+
+volumes:
+  postgres_data:
+  rabbitmq_data:
+
+networks:
+  fintegrate-network:
+    driver: bridge
