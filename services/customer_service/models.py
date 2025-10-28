@@ -26,12 +26,19 @@ class CustomerEvent(Base):
     metadata_json = Column(JSONB)
     created_at = Column(TIMESTAMP, nullable=False, server_default=func.current_timestamp())
     
-    # Transactional Outbox Pattern columns
+    # Transactional Outbox Pattern - Publish Lifecycle
     publish_status = Column(String(20), nullable=False, default="published")  # 'pending', 'published', 'failed'
     published_at = Column(TIMESTAMP, nullable=True)
     publish_try_count = Column(Integer, nullable=False, default=1)
-    last_tried_at = Column(TIMESTAMP, nullable=True)
-    failure_reason = Column(String, nullable=True)  # Stores pika exception details
+    publish_last_tried_at = Column(TIMESTAMP, nullable=True)
+    publish_failure_reason = Column(String, nullable=True)  # Stores pika exception details
+    
+    # Delivery Lifecycle
+    deliver_status = Column(String(20), nullable=False, default="pending")  # 'pending', 'delivered', 'failed'
+    delivered_at = Column(TIMESTAMP, nullable=True)
+    deliver_try_count = Column(Integer, nullable=False, default=0)
+    deliver_last_tried_at = Column(TIMESTAMP, nullable=True)
+    deliver_failure_reason = Column(String, nullable=True)  # DLQ, timeout, etc
 
 
 class CustomerTag(Base):
@@ -83,3 +90,18 @@ class CustomerAnalytics(Base):
     tags_json = Column(JSONB)
     metrics_json = Column(JSONB)
     snapshot_at = Column(TIMESTAMP, nullable=False, server_default=func.current_timestamp())
+
+
+class ConsumerEventReceipt(Base):
+    """Consumer event receipts for idempotency and delivery tracking."""
+    __tablename__ = "consumer_event_receipts"
+    
+    receipt_id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    consumer_id = Column(UUID(as_uuid=True), nullable=True)  # NULL for now, FK later
+    event_id = Column(UUID(as_uuid=True), nullable=False)
+    customer_id = Column(UUID(as_uuid=True), nullable=False)
+    event_type = Column(String(100), nullable=False)
+    received_at = Column(TIMESTAMP, nullable=False)
+    processing_status = Column(String(20), nullable=False)  # 'received', 'processed', 'failed'
+    processing_failure_reason = Column(String, nullable=True)
+    created_at = Column(TIMESTAMP, nullable=False, server_default=func.current_timestamp())

@@ -54,8 +54,8 @@ def create_customer_event(
     publish_status: str = "published",
     published_at: Any = None,
     publish_try_count: int = 1,
-    last_tried_at: Any = None,
-    failure_reason: str | None = None
+    publish_last_tried_at: Any = None,
+    publish_failure_reason: str | None = None
 ) -> CustomerEvent:
     """Create event entry in customer_events table with outbox pattern support."""
     db_event = CustomerEvent(
@@ -67,8 +67,8 @@ def create_customer_event(
         publish_status=publish_status,
         published_at=published_at,
         publish_try_count=publish_try_count,
-        last_tried_at=last_tried_at,
-        failure_reason=failure_reason
+        publish_last_tried_at=publish_last_tried_at,
+        publish_failure_reason=publish_failure_reason
     )
     db.add(db_event)
     db.commit()

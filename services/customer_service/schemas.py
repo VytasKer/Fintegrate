@@ -177,3 +177,53 @@ class EventHealthStandardResponse(BaseModel):
     """Standard response for GET /events/health"""
     data: EventHealthResponseData
     detail: Detail
+
+
+class EventConfirmDeliveryRequest(BaseModel):
+    """Schema for POST /events/confirm-delivery - Consumer confirms receipt"""
+    event_id: UUID = Field(..., description="Event ID from the message")
+    status: str = Field(..., pattern="^(received|processed|failed)$", description="Processing status: received, processed, or failed")
+    received_at: datetime = Field(..., description="Timestamp when consumer received the message")
+    failure_reason: Optional[str] = Field(None, description="Reason for failure if status='failed'")
+
+
+class EventConfirmDeliveryStandardResponse(BaseModel):
+    """Standard response for POST /events/confirm-delivery"""
+    data: Dict[str, Any]
+    detail: Detail
+
+
+class EventRedeliverRequest(BaseModel):
+    """Schema for POST /events/redeliver - Redeliver pending deliveries"""
+    period_in_days: int = Field(..., ge=1, le=365, description="How many days back to search for undelivered events")
+    max_try_count: Optional[int] = Field(None, ge=1, le=10, description="Skip events that exceeded this delivery retry count")
+    event_types: Optional[List[str]] = Field(None, description="Filter by specific event types")
+
+
+class EventRedeliverFailedEvent(BaseModel):
+    """Schema for failed event details in redeliver response"""
+    event_id: UUID
+    event_type: str
+    deliver_try_count: int
+    deliver_failure_reason: Optional[str]
+
+
+class EventRedeliverSummary(BaseModel):
+    """Summary statistics for event redelivery operation"""
+    total_pending: int = Field(..., description="Total undelivered events found")
+    attempted: int = Field(..., description="Number of events attempted to republish")
+    succeeded: int = Field(..., description="Number of successfully republished events")
+    failed: int = Field(..., description="Number of events that failed to republish")
+    skipped: int = Field(..., description="Number of events skipped (exceeded max_try_count)")
+
+
+class EventRedeliverResponseData(BaseModel):
+    """Data section for event redeliver response"""
+    summary: EventRedeliverSummary
+    failed_events: List[EventRedeliverFailedEvent]
+
+
+class EventRedeliverStandardResponse(BaseModel):
+    """Standard response for POST /events/redeliver"""
+    data: EventRedeliverResponseData
+    detail: Detail

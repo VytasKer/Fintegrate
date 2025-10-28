@@ -26,7 +26,11 @@ from services.customer_service.schemas import (
     CustomerTagGetStandardResponse,
     EventResendRequest,
     EventResendStandardResponse,
-    EventHealthStandardResponse
+    EventHealthStandardResponse,
+    EventConfirmDeliveryRequest,
+    EventConfirmDeliveryStandardResponse,
+    EventRedeliverRequest,
+    EventRedeliverStandardResponse
 )
 from services.customer_service import crud
 from services.shared.response_handler import success_response, error_response
@@ -65,8 +69,8 @@ def create_customer(customer: CustomerCreate, request: Request, db: Session = De
             publish_status="pending",  # Default to pending
             published_at=None,
             publish_try_count=1,
-            last_tried_at=datetime.utcnow(),
-            failure_reason=None
+            publish_last_tried_at=datetime.utcnow(),
+            publish_failure_reason=None
         )
         
         # Now try to publish to RabbitMQ
@@ -88,25 +92,28 @@ def create_customer(customer: CustomerCreate, request: Request, db: Session = De
                     # Update event record - successfully published
                     event.publish_status = "published"
                     event.published_at = datetime.utcnow()
-                    event.failure_reason = None
+                    event.publish_failure_reason = None
+                    # Track initial delivery attempt
+                    event.deliver_try_count = 1
+                    event.deliver_last_tried_at = datetime.utcnow()
                     db.commit()
                     print(f"RabbitMQ publish successful, event marked as published")
                 else:
                     # Update failure reason
-                    event.failure_reason = "RabbitMQ publish returned False"
+                    event.publish_failure_reason = "RabbitMQ publish returned False"
                     db.commit()
-                    print(f"RabbitMQ publish failed: {event.failure_reason}")
+                    print(f"RabbitMQ publish failed: {event.publish_failure_reason}")
             else:
                 # Update failure reason
-                event.failure_reason = "EventPublisher connection is None"
+                event.publish_failure_reason = "EventPublisher connection is None"
                 db.commit()
                 print(f"Publisher is None - RabbitMQ connection failed")
                 
         except Exception as mq_error:
             # Update failure reason
-            event.failure_reason = f"{type(mq_error).__name__}: {str(mq_error)}"
+            event.publish_failure_reason = f"{type(mq_error).__name__}: {str(mq_error)}"
             db.commit()
-            print(f"RabbitMQ publish exception (non-blocking): {event.failure_reason}")
+            print(f"RabbitMQ publish exception (non-blocking): {event.publish_failure_reason}")
             import traceback
             traceback.print_exc()
         
@@ -483,8 +490,8 @@ def delete_customer(customer_id: UUID, request: Request, db: Session = Depends(g
             publish_status="pending",
             published_at=None,
             publish_try_count=1,
-            last_tried_at=datetime.utcnow(),
-            failure_reason=None
+            publish_last_tried_at=datetime.utcnow(),
+            publish_failure_reason=None
         )
         
         # Step 5: Try to publish to RabbitMQ
@@ -504,21 +511,24 @@ def delete_customer(customer_id: UUID, request: Request, db: Session = Depends(g
                 if publish_success:
                     event.publish_status = "published"
                     event.published_at = datetime.utcnow()
-                    event.failure_reason = None
+                    event.publish_failure_reason = None
+                    # Track initial delivery attempt
+                    event.deliver_try_count = 1
+                    event.deliver_last_tried_at = datetime.utcnow()
                     db.commit()
                     print(f"RabbitMQ publish successful, event marked as published")
                 else:
-                    event.failure_reason = "RabbitMQ publish returned False"
+                    event.publish_failure_reason = "RabbitMQ publish returned False"
                     db.commit()
-                    print(f"RabbitMQ publish failed: {event.failure_reason}")
+                    print(f"RabbitMQ publish failed: {event.publish_failure_reason}")
             else:
-                event.failure_reason = "EventPublisher connection is None"
+                event.publish_failure_reason = "EventPublisher connection is None"
                 db.commit()
                 print(f"Publisher is None - RabbitMQ connection failed")
         except Exception as mq_error:
-            event.failure_reason = f"{type(mq_error).__name__}: {str(mq_error)}"
+            event.publish_failure_reason = f"{type(mq_error).__name__}: {str(mq_error)}"
             db.commit()
-            print(f"RabbitMQ publish exception (non-blocking): {event.failure_reason}")
+            print(f"RabbitMQ publish exception (non-blocking): {event.publish_failure_reason}")
             import traceback
             traceback.print_exc()
         
@@ -640,8 +650,8 @@ def change_customer_status(status_change: CustomerStatusChange, request: Request
             publish_status="pending",
             published_at=None,
             publish_try_count=1,
-            last_tried_at=datetime.utcnow(),
-            failure_reason=None
+            publish_last_tried_at=datetime.utcnow(),
+            publish_failure_reason=None
         )
         
         # Try to publish to RabbitMQ
@@ -661,21 +671,24 @@ def change_customer_status(status_change: CustomerStatusChange, request: Request
                 if publish_success:
                     event.publish_status = "published"
                     event.published_at = datetime.utcnow()
-                    event.failure_reason = None
+                    event.publish_failure_reason = None
+                    # Track initial delivery attempt
+                    event.deliver_try_count = 1
+                    event.deliver_last_tried_at = datetime.utcnow()
                     db.commit()
                     print(f"RabbitMQ publish successful, event marked as published")
                 else:
-                    event.failure_reason = "RabbitMQ publish returned False"
+                    event.publish_failure_reason = "RabbitMQ publish returned False"
                     db.commit()
-                    print(f"RabbitMQ publish failed: {event.failure_reason}")
+                    print(f"RabbitMQ publish failed: {event.publish_failure_reason}")
             else:
-                event.failure_reason = "EventPublisher connection is None"
+                event.publish_failure_reason = "EventPublisher connection is None"
                 db.commit()
                 print(f"Publisher is None - RabbitMQ connection failed")
         except Exception as mq_error:
-            event.failure_reason = f"{type(mq_error).__name__}: {str(mq_error)}"
+            event.publish_failure_reason = f"{type(mq_error).__name__}: {str(mq_error)}"
             db.commit()
-            print(f"RabbitMQ publish exception (non-blocking): {event.failure_reason}")
+            print(f"RabbitMQ publish exception (non-blocking): {event.publish_failure_reason}")
             import traceback
             traceback.print_exc()
         
@@ -795,8 +808,8 @@ def resend_pending_events(resend_request: EventResendRequest, request: Request, 
                     event.publish_status = 'published'
                     event.published_at = datetime.utcnow()
                     event.publish_try_count += 1
-                    event.last_tried_at = datetime.utcnow()
-                    event.failure_reason = None
+                    event.publish_last_tried_at = datetime.utcnow()
+                    event.publish_failure_reason = None
                     succeeded += 1
                 else:
                     failure_reason = "RabbitMQ publish returned False"
@@ -807,8 +820,8 @@ def resend_pending_events(resend_request: EventResendRequest, request: Request, 
             # If publishing failed, update record
             if not publish_success:
                 event.publish_try_count += 1
-                event.last_tried_at = datetime.utcnow()
-                event.failure_reason = failure_reason
+                event.publish_last_tried_at = datetime.utcnow()
+                event.publish_failure_reason = failure_reason
                 
                 # Mark as permanently failed if exceeded max retries (10)
                 if event.publish_try_count >= 10:
@@ -910,3 +923,229 @@ def get_events_health(request: Request, db: Session = Depends(get_db)):
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             content=error_resp
         )
+
+@router.post("/events/confirm-delivery", response_model=EventConfirmDeliveryStandardResponse, status_code=status.HTTP_200_OK)
+def confirm_event_delivery(confirmation: EventConfirmDeliveryRequest, request: Request, db: Session = Depends(get_db)):
+    """
+    Consumer confirms successful receipt and processing of an event.
+    
+    - **event_id**: UUID of the event that was processed
+    - **status**: Processing status ('received', 'processed', or 'failed')
+    - **received_at**: Timestamp when consumer received the message
+    - **failure_reason**: Optional - reason if processing failed
+    
+    Returns: Success confirmation
+    """
+    try:
+        from services.customer_service.models import CustomerEvent, ConsumerEventReceipt
+        
+        # Find the event
+        event = db.query(CustomerEvent).filter(CustomerEvent.event_id == confirmation.event_id).first()
+        
+        if not event:
+            error_resp = error_response(
+                status.HTTP_404_NOT_FOUND,
+                f"Event {confirmation.event_id} not found"
+            )
+            return JSONResponse(
+                status_code=status.HTTP_404_NOT_FOUND,
+                content=error_resp
+            )
+        
+        # Check for duplicate delivery confirmation (idempotency)
+        existing_receipt = db.query(ConsumerEventReceipt).filter(
+            ConsumerEventReceipt.event_id == confirmation.event_id
+        ).first()
+        
+        if existing_receipt:
+            # Already processed - return success (idempotent)
+            return success_response({}, status.HTTP_200_OK)
+        
+        # Create consumer receipt record
+        receipt = ConsumerEventReceipt(
+            consumer_id=None,  # Will be populated when authentication is added
+            event_id=confirmation.event_id,
+            customer_id=event.customer_id,
+            event_type=event.event_type,
+            received_at=confirmation.received_at,
+            processing_status=confirmation.status,
+            processing_failure_reason=confirmation.failure_reason
+        )
+        db.add(receipt)
+        
+        # Update event delivery status
+        if confirmation.status in ['received', 'processed']:
+            event.deliver_status = 'delivered'
+            event.delivered_at = datetime.utcnow()
+            event.deliver_failure_reason = None
+        else:  # status == 'failed'
+            event.deliver_status = 'failed'
+            event.deliver_failure_reason = confirmation.failure_reason
+        
+        db.commit()
+        
+        return success_response({}, status.HTTP_200_OK)
+        
+    except Exception as e:
+        error_resp = error_response(
+            status.HTTP_500_INTERNAL_SERVER_ERROR,
+            f"Failed to confirm delivery: {str(e)}"
+        )
+        return JSONResponse(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            content=error_resp
+        )
+
+
+@router.post("/events/redeliver", response_model=EventRedeliverStandardResponse, status_code=status.HTTP_200_OK)
+def redeliver_pending_events(redeliver_request: EventRedeliverRequest, request: Request, db: Session = Depends(get_db)):
+    """
+    Redeliver events that failed delivery to consumers (admin troubleshooting).
+    
+    - **period_in_days**: Search for events created within this many days (1-365)
+    - **max_try_count**: Optional - Skip events that exceeded this delivery retry count
+    - **event_types**: Optional - Filter by specific event types
+    
+    Returns: Summary of redelivery operation with failed event details
+    """
+    try:
+        from datetime import timedelta
+        from services.customer_service.models import CustomerEvent
+        from sqlalchemy import and_
+        
+        # Calculate cutoff date
+        cutoff_date = datetime.utcnow() - timedelta(days=redeliver_request.period_in_days)
+        
+        # Build query filters - events that were published but not delivered
+        filters = [
+            CustomerEvent.created_at > cutoff_date,
+            CustomerEvent.publish_status == 'published',  # Successfully published
+            CustomerEvent.deliver_status == 'pending'     # But not delivered
+        ]
+        
+        if redeliver_request.max_try_count is not None:
+            filters.append(CustomerEvent.deliver_try_count < redeliver_request.max_try_count)
+        
+        if redeliver_request.event_types:
+            filters.append(CustomerEvent.event_type.in_(redeliver_request.event_types))
+        
+        # Query pending delivery events, ordered by created_at ASC for ordering guarantee
+        pending_events = db.query(CustomerEvent).filter(and_(*filters)).order_by(CustomerEvent.created_at.asc()).all()
+        
+        # Initialize counters
+        total_pending = len(pending_events)
+        attempted = 0
+        succeeded = 0
+        failed = 0
+        skipped = 0
+        failed_events_list = []
+        
+        # Get publisher
+        publisher = get_event_publisher()
+        
+        if not publisher:
+            # If RabbitMQ is completely unavailable, return early
+            from services.customer_service.schemas import EventRedeliverResponseData, EventRedeliverSummary
+            response_data = EventRedeliverResponseData(
+                summary=EventRedeliverSummary(
+                    total_pending=total_pending,
+                    attempted=0,
+                    succeeded=0,
+                    failed=0,
+                    skipped=total_pending
+                ),
+                failed_events=[]
+            )
+            return success_response(response_data.model_dump(), status.HTTP_200_OK)
+        
+        # Attempt to republish each event
+        for event in pending_events:
+            # Check if should skip
+            if redeliver_request.max_try_count and event.deliver_try_count >= redeliver_request.max_try_count:
+                skipped += 1
+                continue
+            
+            attempted += 1
+            publish_success = False
+            failure_reason = None
+            
+            try:
+                # Extract data from payload
+                payload = event.payload_json
+                customer_id = UUID(payload.get("customer_id"))
+                name = payload.get("name")
+                status_val = payload.get("status")
+                
+                # Republish to RabbitMQ
+                publish_success = publisher.publish_event(
+                    event_id=event.event_id,
+                    event_type=event.event_type,
+                    customer_id=customer_id,
+                    name=name,
+                    status=status_val,
+                    created_at=event.created_at
+                )
+                
+                if publish_success:
+                    # Update delivery attempt tracking
+                    event.deliver_try_count += 1
+                    event.deliver_last_tried_at = datetime.utcnow()
+                    event.deliver_failure_reason = None
+                    succeeded += 1
+                else:
+                    failure_reason = "RabbitMQ publish returned False"
+                    
+            except Exception as publish_error:
+                failure_reason = f"{type(publish_error).__name__}: {str(publish_error)}"
+            
+            # If republishing failed, update record
+            if not publish_success:
+                event.deliver_try_count += 1
+                event.deliver_last_tried_at = datetime.utcnow()
+                event.deliver_failure_reason = failure_reason
+                
+                # Mark as permanently failed if exceeded max retries (10)
+                if event.deliver_try_count >= 10:
+                    event.deliver_status = 'failed'
+                
+                failed += 1
+                
+                # Add to failed events list
+                from services.customer_service.schemas import EventRedeliverFailedEvent
+                failed_events_list.append(
+                    EventRedeliverFailedEvent(
+                        event_id=event.event_id,
+                        event_type=event.event_type,
+                        deliver_try_count=event.deliver_try_count,
+                        deliver_failure_reason=failure_reason
+                    )
+                )
+        
+        # Commit all updates
+        db.commit()
+        
+        # Build response
+        from services.customer_service.schemas import EventRedeliverResponseData, EventRedeliverSummary
+        response_data = EventRedeliverResponseData(
+            summary=EventRedeliverSummary(
+                total_pending=total_pending,
+                attempted=attempted,
+                succeeded=succeeded,
+                failed=failed,
+                skipped=skipped
+            ),
+            failed_events=failed_events_list
+        )
+        
+        return success_response(response_data.model_dump(), status.HTTP_200_OK)
+        
+    except Exception as e:
+        error_resp = error_response(
+            status.HTTP_500_INTERNAL_SERVER_ERROR,
+            f"Failed to redeliver events: {str(e)}"
+        )
+        return JSONResponse(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            content=error_resp
+        )
+
