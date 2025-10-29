@@ -35,7 +35,7 @@ def callback(ch, method, properties, body):
         # Uncomment ONE scenario to test:
         
         # Scenario 1: Permanent error (missing field) → immediate DLQ
-        # _ = message['data']['nonexistent_field']  # Raises KeyError
+        # = message['data']['nonexistent_field']  # Raises KeyError
         
         # Scenario 2: Transient error → 3 retries then DLQ
         # raise ConnectionError("Simulated DB timeout")
