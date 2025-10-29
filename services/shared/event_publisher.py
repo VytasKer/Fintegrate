@@ -4,6 +4,7 @@ Publishes domain events to message queue for async processing.
 """
 import pika
 import json
+import os
 from typing import Dict, Any
 from uuid import UUID
 from datetime import datetime
@@ -129,8 +130,19 @@ class EventPublisher:
 _publisher_instance = None
 
 def get_event_publisher() -> EventPublisher:
-    """Get or create EventPublisher singleton."""
+    """Get or create EventPublisher singleton with environment variable support."""
     global _publisher_instance
     if _publisher_instance is None:
-        _publisher_instance = EventPublisher()
+        # Use environment variables (Docker) or defaults (local)
+        host = os.getenv('RABBITMQ_HOST', 'localhost')
+        port = int(os.getenv('RABBITMQ_PORT', '5672'))
+        username = os.getenv('RABBITMQ_USER', 'fintegrate_user')
+        password = os.getenv('RABBITMQ_PASS', 'fintegrate_pass')
+        
+        _publisher_instance = EventPublisher(
+            host=host,
+            port=port,
+            username=username,
+            password=password
+        )
     return _publisher_instance

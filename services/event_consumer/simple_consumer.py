@@ -7,7 +7,11 @@ import pika
 import json
 import sys
 import requests
+import os
 from datetime import datetime
+
+# Global variable for customer service URL (set in main)
+CUSTOMER_SERVICE_URL = "http://localhost:8000"
 
 
 def callback(ch, method, properties, body):
@@ -61,7 +65,7 @@ def callback(ch, method, properties, body):
             
             print(f"Calling POST /events/confirm-delivery for event {event_id}...")
             response = requests.post(
-                "http://localhost:8000/events/confirm-delivery",
+                f"{CUSTOMER_SERVICE_URL}/events/confirm-delivery",
                 json=confirmation_payload,
                 timeout=5
             )
@@ -97,7 +101,7 @@ def callback(ch, method, properties, body):
                     "failure_reason": failure_reason
                 }
                 requests.post(
-                    "http://localhost:8000/events/confirm-delivery",
+                    f"{CUSTOMER_SERVICE_URL}/events/confirm-delivery",
                     json=confirmation_payload,
                     timeout=5
                 )
@@ -133,7 +137,7 @@ def callback(ch, method, properties, body):
                         "failure_reason": f"Max retries exceeded: {failure_reason}"
                     }
                     requests.post(
-                        "http://localhost:8000/events/confirm-delivery",
+                        f"{CUSTOMER_SERVICE_URL}/events/confirm-delivery",
                         json=confirmation_payload,
                         timeout=5
                     )
@@ -173,12 +177,21 @@ def callback(ch, method, properties, body):
 
 def main():
     """Start consumer and listen for messages."""
+    global CUSTOMER_SERVICE_URL
+    
     try:
+        # Get configuration from environment variables (Docker) or use defaults (local)
+        rabbitmq_host = os.getenv('RABBITMQ_HOST', 'localhost')
+        rabbitmq_port = int(os.getenv('RABBITMQ_PORT', '5672'))
+        rabbitmq_user = os.getenv('RABBITMQ_USER', 'fintegrate_user')
+        rabbitmq_pass = os.getenv('RABBITMQ_PASS', 'fintegrate_pass')
+        CUSTOMER_SERVICE_URL = os.getenv('CUSTOMER_SERVICE_URL', 'http://localhost:8000')
+        
         # Connect to RabbitMQ
-        credentials = pika.PlainCredentials('fintegrate_user', 'fintegrate_pass')
+        credentials = pika.PlainCredentials(rabbitmq_user, rabbitmq_pass)
         parameters = pika.ConnectionParameters(
-            host='localhost',
-            port=5672,
+            host=rabbitmq_host,
+            port=rabbitmq_port,
             credentials=credentials
         )
         connection = pika.BlockingConnection(parameters)

@@ -1,9 +1,80 @@
 # Docker Compose Configuration
-# Phase 2: Core Integration - Message Queue
+# Phase 3: API Gateway with Traefik
 
 version: '3.8'
 
 services:
+  # API Gateway
+  traefik:
+    image: traefik:v2.10
+    container_name: fintegrate-traefik
+    command:
+      # Enable Docker provider
+      - "--providers.docker=true"
+      - "--providers.docker.exposedbydefault=false"
+      # Define entrypoints
+      - "--entrypoints.web.address=:80"
+      # Enable Traefik dashboard
+      - "--api.dashboard=true"
+      - "--api.insecure=true"
+      # Enable access logs for debugging
+      - "--accesslog=true"
+      - "--log.level=INFO"
+    ports:
+      - "80:80"       # HTTP entry point
+      - "8080:8080"   # Traefik dashboard
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    networks:
+      - fintegrate-network
+    labels:
+      - "traefik.enable=true"
+
+  # Customer Service (FastAPI)
+  customer_service:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile.customer_service
+    container_name: fintegrate-customer-service
+    environment:
+      DATABASE_URL: postgresql://fintegrate_user:fintegrate_pass@postgres:5432/fintegrate_db
+      RABBITMQ_HOST: rabbitmq
+      RABBITMQ_PORT: 5672
+      RABBITMQ_USER: fintegrate_user
+      RABBITMQ_PASS: fintegrate_pass
+    depends_on:
+      - postgres
+      - rabbitmq
+    networks:
+      - fintegrate-network
+    labels:
+      # Enable Traefik for this service
+      - "traefik.enable=true"
+      # HTTP router configuration
+      - "traefik.http.routers.customer-service.rule=PathPrefix(`/customer`) || PathPrefix(`/events`)"
+      - "traefik.http.routers.customer-service.entrypoints=web"
+      # Service configuration
+      - "traefik.http.services.customer-service.loadbalancer.server.port=8000"
+
+  # Event Consumer (RabbitMQ listener)
+  event_consumer:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile.event_consumer
+    container_name: fintegrate-event-consumer
+    environment:
+      RABBITMQ_HOST: rabbitmq
+      RABBITMQ_PORT: 5672
+      RABBITMQ_USER: fintegrate_user
+      RABBITMQ_PASS: fintegrate_pass
+      CUSTOMER_SERVICE_URL: http://customer_service:8000
+    depends_on:
+      - rabbitmq
+      - customer_service
+    networks:
+      - fintegrate-network
+    restart: unless-stopped
+
   postgres:
     image: postgres:15-alpine
     container_name: fintegrate-postgres

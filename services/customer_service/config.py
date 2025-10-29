@@ -5,6 +5,7 @@ from functools import lru_cache
 
 class Settings(BaseSettings):
     # Database
+    database_url: str = os.getenv("DATABASE_URL", "")
     db_host: str = os.getenv("DB_HOST", "localhost")
     db_port: int = int(os.getenv("DB_PORT", "5435"))
     db_name: str = os.getenv("DB_NAME", "fintegrate_db")
@@ -20,8 +21,10 @@ class Settings(BaseSettings):
     service_name: str = os.getenv("SERVICE_NAME", "customer_service")
     service_version: str = os.getenv("SERVICE_VERSION", "1.0.0")
     
-    @property
-    def database_url(self) -> str:
+    def get_database_url(self) -> str:
+        """Get database URL, preferring environment variable."""
+        if self.database_url:
+            return self.database_url
         return f"postgresql://{self.db_user}:{self.db_password}@{self.db_host}:{self.db_port}/{self.db_name}"
     
     class Config:
