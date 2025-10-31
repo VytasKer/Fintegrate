@@ -51,7 +51,7 @@ services:
       # Enable Traefik for this service
       - "traefik.enable=true"
       # HTTP router configuration
-      - "traefik.http.routers.customer-service.rule=PathPrefix(`/customer`) || PathPrefix(`/events`)"
+      - "traefik.http.routers.customer-service.rule=PathPrefix(`/customer`) || PathPrefix(`/events`) || PathPrefix(`/consumer`) || PathPrefix(`/admin`)"
       - "traefik.http.routers.customer-service.entrypoints=web"
       # Service configuration
       - "traefik.http.services.customer-service.loadbalancer.server.port=8000"

@@ -1,8 +1,13 @@
 from sqlalchemy.orm import Session
 from sqlalchemy import func, desc
 from uuid import UUID
-from typing import Dict, Any, List
-from services.customer_service.models import Customer, CustomerEvent, CustomerTag, CustomerArchive, AuditLog, CustomerAnalytics
+from typing import Dict, Any, List, Optional
+import secrets
+import hashlib
+from services.customer_service.models import (
+    Customer, CustomerEvent, CustomerTag, CustomerArchive, 
+    AuditLog, CustomerAnalytics, Consumer, ConsumerApiKey
+)
 from services.customer_service.schemas import CustomerCreate
 
 
@@ -55,11 +60,18 @@ def create_customer_event(
     published_at: Any = None,
     publish_try_count: int = 1,
     publish_last_tried_at: Any = None,
-    publish_failure_reason: str | None = None
+    publish_failure_reason: str | None = None,
+    consumer_id: UUID | None = None
 ) -> CustomerEvent:
     """Create event entry in customer_events table with outbox pattern support."""
+    # Default to system consumer if not specified
+    if consumer_id is None:
+        from uuid import UUID as UUID_Type
+        consumer_id = UUID_Type('00000000-0000-0000-0000-000000000001')
+    
     db_event = CustomerEvent(
         customer_id=customer_id,
+        consumer_id=consumer_id,
         event_type=event_type,
         source_service=source_service,
         payload_json=payload,
@@ -267,3 +279,212 @@ def create_customer_analytics_snapshot(db: Session, customer_id: UUID) -> Custom
     db.commit()
     db.refresh(analytics_snapshot)
     return analytics_snapshot
+
+
+# Consumer Management Functions
+
+def generate_api_key() -> str:
+    """Generate cryptographically secure API key (32 bytes = 64 hex chars)."""
+    return secrets.token_urlsafe(32)
+
+
+def hash_api_key(api_key: str) -> str:
+    """Hash API key using SHA-256."""
+    return hashlib.sha256(api_key.encode()).hexdigest()
+
+
+def create_consumer(db: Session, name: str, description: Optional[str] = None) -> tuple[Consumer, str]:
+    """
+    Create new consumer with auto-generated API key.
+    Returns tuple of (Consumer, plaintext_api_key).
+    """
+    # Create consumer
+    db_consumer = Consumer(
+        name=name,
+        description=description,
+        status="active"
+    )
+    db.add(db_consumer)
+    db.flush()  # Get consumer_id without committing
+    
+    # Generate and hash API key
+    plaintext_key = generate_api_key()
+    hashed_key = hash_api_key(plaintext_key)
+    
+    # Create API key record
+    db_api_key = ConsumerApiKey(
+        consumer_id=db_consumer.consumer_id,
+        api_key_hash=hashed_key,
+        status="active",
+        created_by="system"
+    )
+    db.add(db_api_key)
+    
+    # Create consumer creation event
+    db_event = CustomerEvent(
+        customer_id=db_consumer.consumer_id,  # Using consumer_id as customer_id for this event type
+        consumer_id=db_consumer.consumer_id,
+        event_type="consumer.created",
+        source_service="POST: /consumer/data",
+        payload_json={"consumer_id": str(db_consumer.consumer_id), "name": name},
+        metadata_json={"created_by": "system"},
+        publish_status="published",
+        publish_try_count=0
+    )
+    db.add(db_event)
+    
+    db.commit()
+    db.refresh(db_consumer)
+    
+    return db_consumer, plaintext_key
+
+
+def get_consumer_by_id(db: Session, consumer_id: UUID) -> Optional[Consumer]:
+    """Retrieve consumer by ID."""
+    return db.query(Consumer).filter(Consumer.consumer_id == consumer_id).first()
+
+
+def get_consumer_by_api_key(db: Session, api_key: str) -> Optional[Consumer]:
+    """
+    Authenticate API key and return associated consumer.
+    Returns None if key invalid or expired.
+    """
+    hashed_key = hash_api_key(api_key)
+    
+    db_api_key = db.query(ConsumerApiKey).filter(
+        ConsumerApiKey.api_key_hash == hashed_key,
+        ConsumerApiKey.status == "active"
+    ).first()
+    
+    if not db_api_key:
+        return None
+    
+    # Check expiration
+    if db_api_key.expires_at and db_api_key.expires_at < func.now():
+        return None
+    
+    # Update last_used_at
+    db_api_key.last_used_at = func.now()
+    db.commit()
+    
+    # Return consumer
+    return db.query(Consumer).filter(
+        Consumer.consumer_id == db_api_key.consumer_id,
+        Consumer.status == "active"
+    ).first()
+
+
+def rotate_api_key(db: Session, consumer_id: UUID) -> Optional[str]:
+    """
+    Deactivate existing active key and generate new one.
+    Returns plaintext new key or None if consumer not found.
+    """
+    # Verify consumer exists and is active
+    consumer = get_consumer_by_id(db, consumer_id)
+    if not consumer or consumer.status != "active":
+        return None
+    
+    # Deactivate existing active keys
+    db.query(ConsumerApiKey).filter(
+        ConsumerApiKey.consumer_id == consumer_id,
+        ConsumerApiKey.status == "active"
+    ).update({"status": "deactivated"})
+    
+    # Generate new key
+    plaintext_key = generate_api_key()
+    hashed_key = hash_api_key(plaintext_key)
+    
+    db_api_key = ConsumerApiKey(
+        consumer_id=consumer_id,
+        api_key_hash=hashed_key,
+        status="active",
+        created_by="consumer_rotation"
+    )
+    db.add(db_api_key)
+    
+    # Create key rotation event
+    db_event = CustomerEvent(
+        customer_id=consumer_id,  # Using consumer_id as customer_id for this event type
+        consumer_id=consumer_id,
+        event_type="consumer.key_rotated",
+        source_service="POST: /consumer/me/api-key/rotate",
+        payload_json={"consumer_id": str(consumer_id)},
+        metadata_json={},
+        publish_status="published",
+        publish_try_count=0
+    )
+    db.add(db_event)
+    
+    db.commit()
+    return plaintext_key
+
+
+def deactivate_api_key(db: Session, consumer_id: UUID) -> bool:
+    """
+    Deactivate consumer's active API key.
+    Returns True if key was deactivated, False otherwise.
+    """
+    result = db.query(ConsumerApiKey).filter(
+        ConsumerApiKey.consumer_id == consumer_id,
+        ConsumerApiKey.status == "active"
+    ).update({"status": "deactivated"})
+    
+    if result > 0:
+        # Create key deactivation event
+        db_event = CustomerEvent(
+            customer_id=consumer_id,
+            consumer_id=consumer_id,
+            event_type="consumer.key_deactivated",
+            source_service="POST: /consumer/me/api-key/deactivate",
+            payload_json={"consumer_id": str(consumer_id)},
+            metadata_json={},
+            publish_status="published",
+            publish_try_count=0
+        )
+        db.add(db_event)
+        db.commit()
+        return True
+    
+    return False
+
+
+def get_api_key_status(db: Session, consumer_id: UUID) -> Optional[ConsumerApiKey]:
+    """Get active API key metadata for consumer."""
+    return db.query(ConsumerApiKey).filter(
+        ConsumerApiKey.consumer_id == consumer_id,
+        ConsumerApiKey.status == "active"
+    ).first()
+
+
+def change_consumer_status(db: Session, consumer_id: UUID, new_status: str) -> Optional[Consumer]:
+    """
+    Change consumer status (admin operation).
+    Returns updated consumer or None if not found.
+    """
+    consumer = get_consumer_by_id(db, consumer_id)
+    if not consumer:
+        return None
+    
+    old_status = consumer.status
+    consumer.status = new_status
+    
+    # Create status change event
+    db_event = CustomerEvent(
+        customer_id=consumer_id,
+        consumer_id=consumer_id,
+        event_type="consumer.status_changed",
+        source_service="POST: /admin/consumer/{consumer_id}/change-status",
+        payload_json={
+            "consumer_id": str(consumer_id),
+            "old_status": old_status,
+            "new_status": new_status
+        },
+        metadata_json={},
+        publish_status="published",
+        publish_try_count=0
+    )
+    db.add(db_event)
+    
+    db.commit()
+    db.refresh(consumer)
+    return consumer

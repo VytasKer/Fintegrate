@@ -538,6 +538,132 @@ Return 200 OK
 
 ----------------------------------------------------------------------------------------
 
+Recommended Learning Path for Fintegrate
+Step 1: Add Traefik to Docker Compose (1-2 hours)
+Add Traefik container
+Route customer_service through gateway
+Test: http://localhost/customer/data works
+View Traefik dashboard at http://localhost:8080
+Key Concepts: Reverse proxy, routing rules, service discovery
+
+Step 2: Implement API Key Authentication (2-3 hours)
+Create api_keys table in database
+Build middleware to validate keys
+Reject requests without valid key
+Test with Postman: X-API-Key: your-key-here
+Key Concepts: Authentication vs authorization, middleware, security headers
+
+Step 3: Add Rate Limiting (1 hour)
+Configure Traefik rate limiter
+Test: Send 200 requests rapidly → see 429 errors
+Implement per-IP vs per-API-key limits
+Key Concepts: DDoS prevention, throttling strategies, backpressure
+
+Step 4: Setup Monitoring (2-3 hours)
+Enable Prometheus metrics
+Add Grafana dashboard
+Create alerts (e.g., >10% error rate)
+View request latency trends
+Key Concepts: Observability, SLIs/SLOs, alerting
+
+----------------------------------------------------------------------------------------
+
+Step 2: Implement API Key Authentication (2-3 hours)
+Create api_keys table in database
+Build middleware to validate keys
+Reject requests without valid key
+Test with Postman: X-API-Key: your-key-here
+Key Concepts: Authentication vs authorization, middleware, security headers
+
+Tasks:
+1. Create new DB tables "consumers". No tags table will be needed.
+2. Create new DB table "consumer_api_keys".
+3. Update "customer_events" table: add collumn "consumer_id" to differentiate events of different consumers.
+4. Update all current API calls to require new header to provide "X-API-Key".
+5. Create new API calls: 
+- POST: /consumer/data ("consumers" table - number of consumers will be low, initialy 1, later 2-3).
+- POST: /consumer/api-key ("consumer_api_keys" - only one active api key per consumer).
+- GET: /consumer/data
+- GET: /consumer/api-key
+- POST: /consumer/deactivate-api-key
+- POST: /consumer/change-status
+6. Differentiate Rabbit queues by consumer_name, i.e. "customer_notification_[consumer_name]", i.e. "customer_notification_consumer001".
+
+In this prompt, let's start with task 1 and 2 and 3:
+1. Create new DB table "consumers".
+2. Create new DB table "consumer_api_keys".
+3. Update "customer_events" table: add collumn "consumer_id" to differentiate events of different consumers.
+
+My suggestion:
+1. Table "consumers", collumns:
+- consumer_id UUID
+- name
+- status (active, deactivated)
+- created_at
+- updated_at
+
+2. Table "consumer_api_keys", collumns:
+- api_key_value
+- api_key_status (active, expired, deactivated)
+- consumer_id
+- created_at
+- expires_at
+- updated_at
+
+Let's consider now only Tasks 1 and 2 and 3. Do not code, just make your suggestions and corrections (if needed) as an intergation architect (maybe I forgot or did not think about - help me to think like integration architect).
+
+----------------------------------------------------------------------------------------
+
+Migration is done. Let's continue with Tasks 4 and 5:
+
+4. Update all current API calls to require new header to provide "X-API-Key".
+5. Create new API calls: 
+- POST: /consumer/data ("consumers" table - number of consumers will be low, initialy 1, later 2-3).
+- POST: /consumer/api-key ("consumer_api_keys" - only one active api key per consumer).
+- GET: /consumer/data
+- GET: /consumer/api-key
+- POST: /consumer/deactivate-api-key
+- POST: /consumer/change-status
+
+API response body structure skeleton should match current structure for other API calls, i.e. data + detail
+
+- POST: /consumer/data
+IN consumer_name
+OUT consumer_id
+
+- POST: /consumer/api-key
+IN consumer_id
+OUT api_key
+
+- GET: /consumer/data
+IN consumer_id
+OUT name, status, created_at, updated_at
+
+- GET: /consumer/api-key
+IN api_key
+OUT status, created_at, expires_at, updated_at
+
+- POST: /consumer/deactivate-api-key
+IN api_key
+OUT 200 OK
+
+- POST: /consumer/change-status
+IN consumer_id, status
+OUT 200 OK
+
+Let's consider now only Tasks 3 and 4. Do not code, just make your suggestions and corrections (if needed) as an intergation architect.
+
+----------------------------------------------------------------------------------------
+
+Let's consider task 6:
+6. Differentiate Rabbit queues by consumer_name, i.e. "customer_notification_[consumer_name]", i.e. "customer_notification_consumer001".
+
+Do not code yet, just make your suggestions and corrections (if needed) as an intergation architect.
+
+----------------------------------------------------------------------------------------
+
+----------------------------------------------------------------------------------------
+
 ----------------------------------------------------------------------------------------
 
 ----------------------------------------------------------------------------------------

@@ -30,12 +30,20 @@ from services.customer_service.schemas import (
     EventConfirmDeliveryRequest,
     EventConfirmDeliveryStandardResponse,
     EventRedeliverRequest,
-    EventRedeliverStandardResponse
+    EventRedeliverStandardResponse,
+    ConsumerCreate,
+    ConsumerCreateStandardResponse,
+    ConsumerRotateKeyStandardResponse,
+    ConsumerGetStandardResponse,
+    ConsumerKeyStatusStandardResponse,
+    ConsumerChangeStatusRequest,
+    ConsumerChangeStatusStandardResponse
 )
 from services.customer_service import crud
 from services.shared.response_handler import success_response, error_response
 from services.shared.audit_logger import log_error_to_audit
 from services.shared.event_publisher import get_event_publisher
+from services.customer_service.middleware import verify_api_key
 
 router = APIRouter()
 
@@ -1149,3 +1157,216 @@ def redeliver_pending_events(redeliver_request: EventRedeliverRequest, request: 
             content=error_resp
         )
 
+
+# ==========================================
+# Consumer Management Endpoints
+# ==========================================
+
+@router.post("/consumer/data", response_model=ConsumerCreateStandardResponse, status_code=status.HTTP_201_CREATED)
+def create_consumer_endpoint(consumer: ConsumerCreate, request: Request, db: Session = Depends(get_db)):
+    """
+    Create new consumer with auto-generated API key.
+    Returns consumer_id and plaintext API key (only shown once).
+    """
+    try:
+        from services.customer_service.schemas import ConsumerCreateResponseData
+        
+        db_consumer, plaintext_key = crud.create_consumer(
+            db=db,
+            name=consumer.name,
+            description=consumer.description
+        )
+        
+        response_data = ConsumerCreateResponseData(
+            consumer_id=db_consumer.consumer_id,
+            api_key=plaintext_key
+        )
+        
+        return success_response(response_data.model_dump(), status.HTTP_201_CREATED)
+        
+    except Exception as e:
+        error_resp = error_response(
+            status.HTTP_500_INTERNAL_SERVER_ERROR,
+            f"Failed to create consumer: {str(e)}"
+        )
+        return JSONResponse(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            content=error_resp
+        )
+
+
+@router.post("/consumer/me/api-key/rotate", response_model=ConsumerRotateKeyStandardResponse, status_code=status.HTTP_200_OK)
+def rotate_consumer_key(request: Request, db: Session = Depends(get_db), consumer = Depends(verify_api_key)):
+    """
+    Rotate API key for authenticated consumer.
+    Deactivates old key and generates new one.
+    """
+    try:
+        from services.customer_service.schemas import ConsumerRotateKeyResponseData
+        
+        plaintext_key = crud.rotate_api_key(db, consumer.consumer_id)
+        
+        if not plaintext_key:
+            error_resp = error_response(
+                status.HTTP_404_NOT_FOUND,
+                "Consumer not found or inactive"
+            )
+            return JSONResponse(
+                status_code=status.HTTP_404_NOT_FOUND,
+                content=error_resp
+            )
+        
+        response_data = ConsumerRotateKeyResponseData(api_key=plaintext_key)
+        return success_response(response_data.model_dump(), status.HTTP_200_OK)
+        
+    except Exception as e:
+        error_resp = error_response(
+            status.HTTP_500_INTERNAL_SERVER_ERROR,
+            f"Failed to rotate API key: {str(e)}"
+        )
+        return JSONResponse(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            content=error_resp
+        )
+
+
+@router.get("/consumer/me", response_model=ConsumerGetStandardResponse, status_code=status.HTTP_200_OK)
+def get_consumer_me(request: Request, db: Session = Depends(get_db), consumer = Depends(verify_api_key)):
+    """
+    Get authenticated consumer's data.
+    Consumer extracted from X-API-Key header.
+    """
+    try:
+        from services.customer_service.schemas import ConsumerGetResponseData
+        
+        response_data = ConsumerGetResponseData(
+            consumer_id=consumer.consumer_id,
+            name=consumer.name,
+            description=consumer.description,
+            status=consumer.status,
+            created_at=consumer.created_at,
+            updated_at=consumer.updated_at
+        )
+        
+        return success_response(response_data.model_dump(), status.HTTP_200_OK)
+        
+    except Exception as e:
+        error_resp = error_response(
+            status.HTTP_500_INTERNAL_SERVER_ERROR,
+            f"Failed to retrieve consumer data: {str(e)}"
+        )
+        return JSONResponse(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            content=error_resp
+        )
+
+
+@router.get("/consumer/me/api-key", response_model=ConsumerKeyStatusStandardResponse, status_code=status.HTTP_200_OK)
+def get_consumer_key_status(request: Request, db: Session = Depends(get_db), consumer = Depends(verify_api_key)):
+    """
+    Get authenticated consumer's API key metadata.
+    Does not return key value, only status/timestamps.
+    """
+    try:
+        from services.customer_service.schemas import ConsumerKeyStatusResponseData
+        
+        api_key_record = crud.get_api_key_status(db, consumer.consumer_id)
+        
+        if not api_key_record:
+            error_resp = error_response(
+                status.HTTP_404_NOT_FOUND,
+                "No active API key found"
+            )
+            return JSONResponse(
+                status_code=status.HTTP_404_NOT_FOUND,
+                content=error_resp
+            )
+        
+        response_data = ConsumerKeyStatusResponseData(
+            status=api_key_record.status,
+            created_at=api_key_record.created_at,
+            expires_at=api_key_record.expires_at,
+            last_used_at=api_key_record.last_used_at,
+            updated_at=api_key_record.updated_at
+        )
+        
+        return success_response(response_data.model_dump(), status.HTTP_200_OK)
+        
+    except Exception as e:
+        error_resp = error_response(
+            status.HTTP_500_INTERNAL_SERVER_ERROR,
+            f"Failed to retrieve API key status: {str(e)}"
+        )
+        return JSONResponse(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            content=error_resp
+        )
+
+
+@router.post("/consumer/me/api-key/deactivate", response_model=CustomerTagStandardResponse, status_code=status.HTTP_200_OK)
+def deactivate_consumer_key(request: Request, db: Session = Depends(get_db), consumer = Depends(verify_api_key)):
+    """
+    Deactivate authenticated consumer's API key.
+    After this call, key becomes invalid.
+    """
+    try:
+        success = crud.deactivate_api_key(db, consumer.consumer_id)
+        
+        if not success:
+            error_resp = error_response(
+                status.HTTP_404_NOT_FOUND,
+                "No active API key found to deactivate"
+            )
+            return JSONResponse(
+                status_code=status.HTTP_404_NOT_FOUND,
+                content=error_resp
+            )
+        
+        return success_response({}, status.HTTP_200_OK)
+        
+    except Exception as e:
+        error_resp = error_response(
+            status.HTTP_500_INTERNAL_SERVER_ERROR,
+            f"Failed to deactivate API key: {str(e)}"
+        )
+        return JSONResponse(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            content=error_resp
+        )
+
+
+@router.post("/admin/consumer/{consumer_id}/change-status", response_model=ConsumerChangeStatusStandardResponse, status_code=status.HTTP_200_OK)
+def change_consumer_status_admin(
+    consumer_id: UUID,
+    status_change: ConsumerChangeStatusRequest,
+    request: Request,
+    db: Session = Depends(get_db)
+):
+    """
+    Admin endpoint: Change consumer status.
+    TODO: Add admin authentication middleware.
+    """
+    try:
+        updated_consumer = crud.change_consumer_status(db, consumer_id, status_change.status)
+        
+        if not updated_consumer:
+            error_resp = error_response(
+                status.HTTP_404_NOT_FOUND,
+                f"Consumer {consumer_id} not found"
+            )
+            return JSONResponse(
+                status_code=status.HTTP_404_NOT_FOUND,
+                content=error_resp
+            )
+        
+        return success_response({}, status.HTTP_200_OK)
+        
+    except Exception as e:
+        error_resp = error_response(
+            status.HTTP_500_INTERNAL_SERVER_ERROR,
+            f"Failed to change consumer status: {str(e)}"
+        )
+        return JSONResponse(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            content=error_resp
+        )

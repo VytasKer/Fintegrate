@@ -227,3 +227,76 @@ class EventRedeliverStandardResponse(BaseModel):
     """Standard response for POST /events/redeliver"""
     data: EventRedeliverResponseData
     detail: Detail
+
+
+# Consumer Management Schemas
+
+class ConsumerCreate(BaseModel):
+    """Schema for POST /consumer/data - Create consumer"""
+    name: str = Field(..., min_length=1, max_length=230, pattern="^[a-z0-9_]+$", description="Consumer name (alphanumeric + underscore)")
+    description: Optional[str] = Field(None, description="Consumer description")
+
+
+class ConsumerCreateResponseData(BaseModel):
+    """Response data for POST /consumer/data"""
+    consumer_id: UUID
+    api_key: str = Field(..., description="API key in plaintext (only shown once)")
+
+
+class ConsumerCreateStandardResponse(BaseModel):
+    """Standard response for POST /consumer/data"""
+    data: ConsumerCreateResponseData
+    detail: Detail
+
+
+class ConsumerRotateKeyResponseData(BaseModel):
+    """Response data for POST /consumer/me/api-key/rotate"""
+    api_key: str = Field(..., description="New API key in plaintext (only shown once)")
+
+
+class ConsumerRotateKeyStandardResponse(BaseModel):
+    """Standard response for POST /consumer/me/api-key/rotate"""
+    data: ConsumerRotateKeyResponseData
+    detail: Detail
+
+
+class ConsumerGetResponseData(BaseModel):
+    """Response data for GET /consumer/me"""
+    consumer_id: UUID
+    name: str
+    description: Optional[str]
+    status: str
+    created_at: datetime
+    updated_at: datetime
+
+
+class ConsumerGetStandardResponse(BaseModel):
+    """Standard response for GET /consumer/me"""
+    data: ConsumerGetResponseData
+    detail: Detail
+
+
+class ConsumerKeyStatusResponseData(BaseModel):
+    """Response data for GET /consumer/me/api-key"""
+    status: str
+    created_at: datetime
+    expires_at: Optional[datetime]
+    last_used_at: Optional[datetime]
+    updated_at: datetime
+
+
+class ConsumerKeyStatusStandardResponse(BaseModel):
+    """Standard response for GET /consumer/me/api-key"""
+    data: ConsumerKeyStatusResponseData
+    detail: Detail
+
+
+class ConsumerChangeStatusRequest(BaseModel):
+    """Schema for POST /admin/consumer/{consumer_id}/change-status"""
+    status: str = Field(..., pattern="^(active|deactivated|suspended)$", description="Consumer status")
+
+
+class ConsumerChangeStatusStandardResponse(BaseModel):
+    """Standard response for POST /admin/consumer/{consumer_id}/change-status"""
+    data: Dict[str, Any]
+    detail: Detail

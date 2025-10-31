@@ -20,6 +20,7 @@ class CustomerEvent(Base):
     
     event_id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     customer_id = Column(UUID(as_uuid=True), nullable=False)
+    consumer_id = Column(UUID(as_uuid=True), nullable=False)  # Added for multi-consumer support
     event_type = Column(String(100), nullable=False)
     source_service = Column(String(100))
     payload_json = Column(JSONB, nullable=False)
@@ -105,3 +106,30 @@ class ConsumerEventReceipt(Base):
     processing_status = Column(String(20), nullable=False)  # 'received', 'processed', 'failed'
     processing_failure_reason = Column(String, nullable=True)
     created_at = Column(TIMESTAMP, nullable=False, server_default=func.current_timestamp())
+
+
+class Consumer(Base):
+    """Consumers table for multi-consumer architecture."""
+    __tablename__ = "consumers"
+    
+    consumer_id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    name = Column(String(230), nullable=False, unique=True)
+    description = Column(String, nullable=True)
+    status = Column(String(20), nullable=False, default="active")
+    created_at = Column(TIMESTAMP, nullable=False, server_default=func.current_timestamp())
+    updated_at = Column(TIMESTAMP, nullable=False, server_default=func.current_timestamp(), onupdate=func.current_timestamp())
+
+
+class ConsumerApiKey(Base):
+    """Consumer API keys for authentication."""
+    __tablename__ = "consumer_api_keys"
+    
+    api_key_id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    consumer_id = Column(UUID(as_uuid=True), nullable=False)
+    api_key_hash = Column(String(255), nullable=False)
+    status = Column(String(20), nullable=False, default="active")
+    created_at = Column(TIMESTAMP, nullable=False, server_default=func.current_timestamp())
+    created_by = Column(String(100), nullable=True)
+    expires_at = Column(TIMESTAMP, nullable=True)
+    last_used_at = Column(TIMESTAMP, nullable=True)
+    updated_at = Column(TIMESTAMP, nullable=False, server_default=func.current_timestamp(), onupdate=func.current_timestamp())
