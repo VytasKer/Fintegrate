@@ -1,5 +1,5 @@
 from fastapi import FastAPI, Request, status
-from fastapi.exceptions import RequestValidationError
+from fastapi.exceptions import RequestValidationError, HTTPException
 from fastapi.responses import JSONResponse
 import sys
 from pathlib import Path
@@ -65,6 +65,27 @@ async def validation_exception_handler(request: Request, exc: RequestValidationE
     return JSONResponse(
         status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
         content=error_resp
+    )
+
+
+@app.exception_handler(HTTPException)
+async def http_exception_handler(request: Request, exc: HTTPException):
+    """
+    Handle HTTPException with standardized response format.
+    If exc.detail is already a dict (from error_response), use it directly.
+    Otherwise, wrap it in error_response format.
+    """
+    # Check if detail is already in our standard format
+    if isinstance(exc.detail, dict) and "data" in exc.detail and "detail" in exc.detail:
+        # Already formatted by error_response()
+        content = exc.detail
+    else:
+        # Plain string or other format - wrap it
+        content = error_response(exc.status_code, str(exc.detail))
+    
+    return JSONResponse(
+        status_code=exc.status_code,
+        content=content
     )
 
 

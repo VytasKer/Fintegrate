@@ -12,10 +12,12 @@ from datetime import datetime
 
 # Global variable for customer service URL (set in main)
 CUSTOMER_SERVICE_URL = "http://localhost:8000"
+CONSUMER_NAME = None  # Set in main() from environment variable
 
 
 def callback(ch, method, properties, body):
     """Process received message and confirm delivery to Fintegrate API."""
+    global CONSUMER_NAME
     event_id = None
     processing_status = "received"
     failure_reason = None
@@ -60,7 +62,8 @@ def callback(ch, method, properties, body):
                 "event_id": event_id,
                 "status": processing_status,
                 "received_at": datetime.utcnow().isoformat() + "Z",
-                "failure_reason": failure_reason
+                "failure_reason": failure_reason,
+                "consumer_name": CONSUMER_NAME
             }
             
             print(f"Calling POST /events/confirm-delivery for event {event_id}...")
@@ -98,7 +101,8 @@ def callback(ch, method, properties, body):
                     "event_id": event_id,
                     "status": processing_status,
                     "received_at": datetime.utcnow().isoformat() + "Z",
-                    "failure_reason": failure_reason
+                    "failure_reason": failure_reason,
+                    "consumer_name": CONSUMER_NAME
                 }
                 requests.post(
                     f"{CUSTOMER_SERVICE_URL}/events/confirm-delivery",
@@ -134,7 +138,8 @@ def callback(ch, method, properties, body):
                         "event_id": event_id,
                         "status": processing_status,
                         "received_at": datetime.utcnow().isoformat() + "Z",
-                        "failure_reason": f"Max retries exceeded: {failure_reason}"
+                        "failure_reason": f"Max retries exceeded: {failure_reason}",
+                        "consumer_name": CONSUMER_NAME
                     }
                     requests.post(
                         f"{CUSTOMER_SERVICE_URL}/events/confirm-delivery",
@@ -177,7 +182,7 @@ def callback(ch, method, properties, body):
 
 def main():
     """Start consumer and listen for messages."""
-    global CUSTOMER_SERVICE_URL
+    global CUSTOMER_SERVICE_URL, CONSUMER_NAME
     
     try:
         # Get configuration from environment variables (Docker) or use defaults (local)
@@ -186,6 +191,13 @@ def main():
         rabbitmq_user = os.getenv('RABBITMQ_USER', 'fintegrate_user')
         rabbitmq_pass = os.getenv('RABBITMQ_PASS', 'fintegrate_pass')
         CUSTOMER_SERVICE_URL = os.getenv('CUSTOMER_SERVICE_URL', 'http://localhost:8000')
+        
+        # Get consumer name for queue subscription (REQUIRED)
+        consumer_name = os.getenv('CONSUMER_NAME')
+        if not consumer_name:
+            raise ValueError("CONSUMER_NAME environment variable is required")
+        
+        CONSUMER_NAME = consumer_name  # Set global variable
         
         # Connect to RabbitMQ
         credentials = pika.PlainCredentials(rabbitmq_user, rabbitmq_pass)
@@ -197,26 +209,6 @@ def main():
         connection = pika.BlockingConnection(parameters)
         channel = connection.channel()
         
-        # Declare dead letter exchange (DLX)
-        channel.exchange_declare(
-            exchange='customer_events_dlx',
-            exchange_type='direct',
-            durable=True
-        )
-        
-        # Declare dead letter queue (DLQ)
-        channel.queue_declare(
-            queue='customer_notifications_DLQ',
-            durable=True
-        )
-        
-        # Bind DLQ to DLX
-        channel.queue_bind(
-            exchange='customer_events_dlx',
-            queue='customer_notifications_DLQ',
-            routing_key='dlq'
-        )
-        
         # Declare exchange (matches publisher)
         channel.exchange_declare(
             exchange='customer_events',
@@ -224,30 +216,50 @@ def main():
             durable=True
         )
         
-        # Declare main queue with DLX configuration
-        result = channel.queue_declare(
-            queue='customer_notifications',
+        # Construct consumer-specific queue names
+        queue_name = f'customer_notification_{consumer_name}'
+        dlq_name = f'customer_notification_{consumer_name}_DLQ'
+        
+        # Declare DLQ (no dead-letter routing for DLQ itself)
+        channel.queue_declare(
+            queue=dlq_name,
+            durable=True
+        )
+        
+        # Declare main queue with DLQ configuration
+        channel.queue_declare(
+            queue=queue_name,
             durable=True,
             arguments={
-                'x-dead-letter-exchange': 'customer_events_dlx',
-                'x-dead-letter-routing-key': 'dlq'
+                'x-dead-letter-exchange': 'customer_events',
+                'x-dead-letter-routing-key': f'customer.dlq.{consumer_name}',
+                'x-message-ttl': 86400000,  # 24 hours
+                'x-max-length': 100000  # Prevent unbounded growth
             }
         )
-        queue_name = result.method.queue
         
-        # Bind queue to exchange (subscribe to all customer events)
+        # Bind main queue to exchange with consumer-specific pattern
+        # Pattern: customer.*.{consumer_name} matches all event types for this consumer
         channel.queue_bind(
             exchange='customer_events',
             queue=queue_name,
-            routing_key='customer.#'  # Matches customer.creation, customer.deletion, customer.status.change, etc.
+            routing_key=f'customer.*.{consumer_name}'
+        )
+        
+        # Bind DLQ to exchange
+        channel.queue_bind(
+            exchange='customer_events',
+            queue=dlq_name,
+            routing_key=f'customer.dlq.{consumer_name}'
         )
         
         print("="*60)
         print("CONSUMER STARTED - Waiting for messages...")
+        print(f"Consumer Name: {consumer_name}")
         print(f"Queue: {queue_name}")
-        print(f"DLQ: customer_notifications_DLQ")
+        print(f"DLQ: {dlq_name}")
         print(f"Exchange: customer_events")
-        print(f"Routing Key Pattern: customer.#")
+        print(f"Routing Key Pattern: customer.*.{consumer_name}")
         print(f"Max Retries: 3")
         print("Press Ctrl+C to exit")
         print("="*60 + "\n")

@@ -9,6 +9,7 @@ class Customer(Base):
     __tablename__ = "customers"
     
     customer_id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    consumer_id = Column(UUID(as_uuid=True), nullable=False)  # CRITICAL: Multi-tenant data isolation
     name = Column(String(255), nullable=False)
     status = Column(String(50), nullable=False, default="ACTIVE")
     created_at = Column(TIMESTAMP, nullable=False, server_default=func.current_timestamp())
@@ -47,6 +48,7 @@ class CustomerTag(Base):
     
     tag_id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     customer_id = Column(UUID(as_uuid=True), nullable=False)
+    consumer_id = Column(UUID(as_uuid=True), nullable=False)  # CRITICAL: Multi-tenant data isolation
     tag_key = Column(String(100), nullable=False)
     tag_value = Column(String(255))
     created_at = Column(TIMESTAMP, nullable=False, server_default=func.current_timestamp())
@@ -83,6 +85,7 @@ class CustomerAnalytics(Base):
     
     analytics_id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     customer_id = Column(UUID(as_uuid=True), nullable=False)
+    consumer_id = Column(UUID(as_uuid=True), nullable=False)  # CRITICAL: Multi-tenant data isolation
     name = Column(String(255))
     status = Column(String(50))
     created_at = Column(TIMESTAMP)

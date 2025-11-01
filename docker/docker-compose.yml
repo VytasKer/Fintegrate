@@ -68,6 +68,27 @@ services:
       RABBITMQ_USER: fintegrate_user
       RABBITMQ_PASS: fintegrate_pass
       CUSTOMER_SERVICE_URL: http://customer_service:8000
+      CONSUMER_NAME: system_default
+    depends_on:
+      - rabbitmq
+      - customer_service
+    networks:
+      - fintegrate-network
+    restart: unless-stopped
+
+  # Event Consumer for consumer_test001 (testing multi-consumer isolation)
+  event_consumer_test001:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile.event_consumer
+    container_name: fintegrate-event-consumer-test001
+    environment:
+      RABBITMQ_HOST: rabbitmq
+      RABBITMQ_PORT: 5672
+      RABBITMQ_USER: fintegrate_user
+      RABBITMQ_PASS: fintegrate_pass
+      CUSTOMER_SERVICE_URL: http://customer_service:8000
+      CONSUMER_NAME: consumer_test001
     depends_on:
       - rabbitmq
       - customer_service

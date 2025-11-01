@@ -185,6 +185,7 @@ class EventConfirmDeliveryRequest(BaseModel):
     status: str = Field(..., pattern="^(received|processed|failed)$", description="Processing status: received, processed, or failed")
     received_at: datetime = Field(..., description="Timestamp when consumer received the message")
     failure_reason: Optional[str] = Field(None, description="Reason for failure if status='failed'")
+    consumer_name: str = Field(..., description="Name of the consumer processing this event")
 
 
 class EventConfirmDeliveryStandardResponse(BaseModel):

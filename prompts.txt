@@ -662,6 +662,12 @@ Do not code yet, just make your suggestions and corrections (if needed) as an in
 
 ----------------------------------------------------------------------------------------
 
+Some issues to fix:
+1. I see that event types have different syntax, i.e. customer_creation and consumer.created - we need to similarize, I suggest using only "_"
+2. I created customer with test consumer but in customer_events table consumer_id is shown that of admin - 00000000-0000-0000-0000-000000000001 - need to fix.
+3. I created customer with test consumer but no new RabbitMQ queue was created with consumer_id - the message went to customer_notifications with routing key customer.customer.creation.system_default - need to fix.
+4. Also I tried POST: events/redeliver as I saw some events with pending delivery status but got this error message "deliver_failure_reason": "TypeError: one of the hex, bytes, bytes_le, fields, or int arguments must be given" - need to check what's up with that.
+
 ----------------------------------------------------------------------------------------
 
 ----------------------------------------------------------------------------------------

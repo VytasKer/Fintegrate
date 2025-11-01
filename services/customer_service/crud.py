@@ -2,6 +2,7 @@ from sqlalchemy.orm import Session
 from sqlalchemy import func, desc
 from uuid import UUID
 from typing import Dict, Any, List, Optional
+from datetime import datetime
 import secrets
 import hashlib
 from services.customer_service.models import (
@@ -11,9 +12,20 @@ from services.customer_service.models import (
 from services.customer_service.schemas import CustomerCreate
 
 
-def create_customer(db: Session, customer_data: CustomerCreate) -> Customer:
-    """Create new customer in database."""
+def create_customer(db: Session, customer_data: CustomerCreate, consumer_id: UUID) -> Customer:
+    """
+    Create new customer in database.
+    
+    Args:
+        db: Database session
+        customer_data: Customer creation data
+        consumer_id: UUID of the consumer creating this customer (for multi-tenant isolation)
+    
+    Returns:
+        Created customer object
+    """
     db_customer = Customer(
+        consumer_id=consumer_id,
         name=customer_data.name,
         status="ACTIVE"
     )
@@ -23,14 +35,46 @@ def create_customer(db: Session, customer_data: CustomerCreate) -> Customer:
     return db_customer
 
 
-def get_customer(db: Session, customer_id: UUID) -> Customer | None:
-    """Retrieve customer by ID."""
-    return db.query(Customer).filter(Customer.customer_id == customer_id).first()
+def get_customer(db: Session, customer_id: UUID, consumer_id: UUID | None = None) -> Customer | None:
+    """
+    Retrieve customer by ID.
+    
+    Args:
+        db: Database session
+        customer_id: Customer UUID
+        consumer_id: Consumer UUID for ownership validation (required for security)
+    
+    Returns:
+        Customer if found and belongs to consumer, None otherwise
+    """
+    query = db.query(Customer).filter(Customer.customer_id == customer_id)
+    
+    # SECURITY: Filter by consumer_id to prevent cross-consumer data access
+    if consumer_id is not None:
+        query = query.filter(Customer.consumer_id == consumer_id)
+    
+    return query.first()
 
 
-def delete_customer(db: Session, customer_id: UUID) -> bool:
-    """Physically delete customer by ID. Returns True if deleted, False if not found."""
-    db_customer = db.query(Customer).filter(Customer.customer_id == customer_id).first()
+def delete_customer(db: Session, customer_id: UUID, consumer_id: UUID | None = None) -> bool:
+    """
+    Physically delete customer by ID.
+    
+    Args:
+        db: Database session
+        customer_id: Customer UUID
+        consumer_id: Consumer UUID for ownership validation (required for security)
+    
+    Returns:
+        True if deleted, False if not found or doesn't belong to consumer
+    """
+    query = db.query(Customer).filter(Customer.customer_id == customer_id)
+    
+    # SECURITY: Filter by consumer_id to prevent cross-consumer data access
+    if consumer_id is not None:
+        query = query.filter(Customer.consumer_id == consumer_id)
+    
+    db_customer = query.first()
     if db_customer:
         db.delete(db_customer)
         db.commit()
@@ -38,9 +82,26 @@ def delete_customer(db: Session, customer_id: UUID) -> bool:
     return False
 
 
-def update_customer_status(db: Session, customer_id: UUID, new_status: str) -> Customer | None:
-    """Update customer status. Returns updated customer or None if not found."""
-    db_customer = db.query(Customer).filter(Customer.customer_id == customer_id).first()
+def update_customer_status(db: Session, customer_id: UUID, new_status: str, consumer_id: UUID | None = None) -> Customer | None:
+    """
+    Update customer status.
+    
+    Args:
+        db: Database session
+        customer_id: Customer UUID
+        new_status: New status value
+        consumer_id: Consumer UUID for ownership validation (required for security)
+    
+    Returns:
+        Updated customer or None if not found or doesn't belong to consumer
+    """
+    query = db.query(Customer).filter(Customer.customer_id == customer_id)
+    
+    # SECURITY: Filter by consumer_id to prevent cross-consumer data access
+    if consumer_id is not None:
+        query = query.filter(Customer.consumer_id == consumer_id)
+    
+    db_customer = query.first()
     if db_customer:
         db_customer.status = new_status
         db.commit()
@@ -88,14 +149,46 @@ def create_customer_event(
     return db_event
 
 
-def get_customer_tags(db: Session, customer_id: UUID) -> List[CustomerTag]:
-    """Retrieve all tags for a customer."""
-    return db.query(CustomerTag).filter(CustomerTag.customer_id == customer_id).all()
+def get_customer_tags(db: Session, customer_id: UUID, consumer_id: UUID | None = None) -> List[CustomerTag]:
+    """
+    Retrieve all tags for a customer.
+    
+    Args:
+        db: Database session
+        customer_id: Customer UUID
+        consumer_id: Consumer UUID for ownership validation (required for security)
+    
+    Returns:
+        List of tags for the customer (empty if customer doesn't belong to consumer)
+    """
+    query = db.query(CustomerTag).filter(CustomerTag.customer_id == customer_id)
+    
+    # SECURITY: Filter by consumer_id to prevent cross-consumer data access
+    if consumer_id is not None:
+        query = query.filter(CustomerTag.consumer_id == consumer_id)
+    
+    return query.all()
 
 
-def delete_customer_tags(db: Session, customer_id: UUID) -> int:
-    """Delete all tags for a customer. Returns count of deleted tags."""
-    count = db.query(CustomerTag).filter(CustomerTag.customer_id == customer_id).delete()
+def delete_customer_tags(db: Session, customer_id: UUID, consumer_id: UUID | None = None) -> int:
+    """
+    Delete all tags for a customer.
+    
+    Args:
+        db: Database session
+        customer_id: Customer UUID
+        consumer_id: Consumer UUID for ownership validation (required for security)
+    
+    Returns:
+        Count of deleted tags (0 if customer doesn't belong to consumer)
+    """
+    query = db.query(CustomerTag).filter(CustomerTag.customer_id == customer_id)
+    
+    # SECURITY: Filter by consumer_id to prevent cross-consumer data access
+    if consumer_id is not None:
+        query = query.filter(CustomerTag.consumer_id == consumer_id)
+    
+    count = query.delete()
     db.commit()
     return count
 
@@ -144,11 +237,24 @@ def create_audit_log(
     return db_audit
 
 
-def create_customer_tag(db: Session, customer_id: UUID, tag_key: str, tag_value: str) -> CustomerTag:
-    """Create or update a tag for a customer."""
-    # Check if tag already exists
+def create_customer_tag(db: Session, customer_id: UUID, tag_key: str, tag_value: str, consumer_id: UUID) -> CustomerTag:
+    """
+    Create or update a tag for a customer.
+    
+    Args:
+        db: Database session
+        customer_id: Customer UUID
+        tag_key: Tag key
+        tag_value: Tag value
+        consumer_id: Consumer UUID (required for multi-tenant isolation)
+    
+    Returns:
+        Created or updated tag
+    """
+    # Check if tag already exists (with consumer_id filter for security)
     existing_tag = db.query(CustomerTag).filter(
         CustomerTag.customer_id == customer_id,
+        CustomerTag.consumer_id == consumer_id,
         CustomerTag.tag_key == tag_key
     ).first()
     
@@ -162,6 +268,7 @@ def create_customer_tag(db: Session, customer_id: UUID, tag_key: str, tag_value:
         # Create new tag
         db_tag = CustomerTag(
             customer_id=customer_id,
+            consumer_id=consumer_id,
             tag_key=tag_key,
             tag_value=tag_value
         )
@@ -171,20 +278,54 @@ def create_customer_tag(db: Session, customer_id: UUID, tag_key: str, tag_value:
         return db_tag
 
 
-def get_customer_tag(db: Session, customer_id: UUID, tag_key: str) -> CustomerTag | None:
-    """Retrieve a specific tag for a customer."""
-    return db.query(CustomerTag).filter(
+def get_customer_tag(db: Session, customer_id: UUID, tag_key: str, consumer_id: UUID | None = None) -> CustomerTag | None:
+    """
+    Retrieve a specific tag for a customer.
+    
+    Args:
+        db: Database session
+        customer_id: Customer UUID
+        tag_key: Tag key
+        consumer_id: Consumer UUID for ownership validation (required for security)
+    
+    Returns:
+        Tag if found and belongs to consumer, None otherwise
+    """
+    query = db.query(CustomerTag).filter(
         CustomerTag.customer_id == customer_id,
         CustomerTag.tag_key == tag_key
-    ).first()
+    )
+    
+    # SECURITY: Filter by consumer_id to prevent cross-consumer data access
+    if consumer_id is not None:
+        query = query.filter(CustomerTag.consumer_id == consumer_id)
+    
+    return query.first()
 
 
-def delete_customer_tag(db: Session, customer_id: UUID, tag_key: str) -> bool:
-    """Delete a specific tag for a customer. Returns True if deleted, False if not found."""
-    db_tag = db.query(CustomerTag).filter(
+def delete_customer_tag(db: Session, customer_id: UUID, tag_key: str, consumer_id: UUID | None = None) -> bool:
+    """
+    Delete a specific tag for a customer.
+    
+    Args:
+        db: Database session
+        customer_id: Customer UUID
+        tag_key: Tag key
+        consumer_id: Consumer UUID for ownership validation (required for security)
+    
+    Returns:
+        True if deleted, False if not found or doesn't belong to consumer
+    """
+    query = db.query(CustomerTag).filter(
         CustomerTag.customer_id == customer_id,
         CustomerTag.tag_key == tag_key
-    ).first()
+    )
+    
+    # SECURITY: Filter by consumer_id to prevent cross-consumer data access
+    if consumer_id is not None:
+        query = query.filter(CustomerTag.consumer_id == consumer_id)
+    
+    db_tag = query.first()
     
     if db_tag:
         db.delete(db_tag)
@@ -193,12 +334,30 @@ def delete_customer_tag(db: Session, customer_id: UUID, tag_key: str) -> bool:
     return False
 
 
-def update_customer_tag_key(db: Session, customer_id: UUID, old_tag_key: str, new_tag_key: str) -> CustomerTag | None:
-    """Update tag key for a customer. Returns updated tag or None if not found."""
-    db_tag = db.query(CustomerTag).filter(
+def update_customer_tag_key(db: Session, customer_id: UUID, old_tag_key: str, new_tag_key: str, consumer_id: UUID | None = None) -> CustomerTag | None:
+    """
+    Update tag key for a customer.
+    
+    Args:
+        db: Database session
+        customer_id: Customer UUID
+        old_tag_key: Current tag key
+        new_tag_key: New tag key
+        consumer_id: Consumer UUID for ownership validation (required for security)
+    
+    Returns:
+        Updated tag or None if not found or doesn't belong to consumer
+    """
+    query = db.query(CustomerTag).filter(
         CustomerTag.customer_id == customer_id,
         CustomerTag.tag_key == old_tag_key
-    ).first()
+    )
+    
+    # SECURITY: Filter by consumer_id to prevent cross-consumer data access
+    if consumer_id is not None:
+        query = query.filter(CustomerTag.consumer_id == consumer_id)
+    
+    db_tag = query.first()
     
     if db_tag:
         db_tag.tag_key = new_tag_key
@@ -208,12 +367,30 @@ def update_customer_tag_key(db: Session, customer_id: UUID, old_tag_key: str, ne
     return None
 
 
-def update_customer_tag_value(db: Session, customer_id: UUID, tag_key: str, new_tag_value: str) -> CustomerTag | None:
-    """Update tag value for a customer. Returns updated tag or None if not found."""
-    db_tag = db.query(CustomerTag).filter(
+def update_customer_tag_value(db: Session, customer_id: UUID, tag_key: str, new_tag_value: str, consumer_id: UUID | None = None) -> CustomerTag | None:
+    """
+    Update tag value for a customer.
+    
+    Args:
+        db: Database session
+        customer_id: Customer UUID
+        tag_key: Tag key
+        new_tag_value: New tag value
+        consumer_id: Consumer UUID for ownership validation (required for security)
+    
+    Returns:
+        Updated tag or None if not found or doesn't belong to consumer
+    """
+    query = db.query(CustomerTag).filter(
         CustomerTag.customer_id == customer_id,
         CustomerTag.tag_key == tag_key
-    ).first()
+    )
+    
+    # SECURITY: Filter by consumer_id to prevent cross-consumer data access
+    if consumer_id is not None:
+        query = query.filter(CustomerTag.consumer_id == consumer_id)
+    
+    db_tag = query.first()
     
     if db_tag:
         db_tag.tag_value = new_tag_value
@@ -223,30 +400,54 @@ def update_customer_tag_value(db: Session, customer_id: UUID, tag_key: str, new_
     return None
 
 
-def create_customer_analytics_snapshot(db: Session, customer_id: UUID) -> CustomerAnalytics:
+def create_customer_analytics_snapshot(db: Session, customer_id: UUID, consumer_id: UUID | None = None) -> CustomerAnalytics:
     """
     Create an analytics snapshot for a customer.
     Captures current state: name, status, event count, tags, and calculated metrics.
     Multiple snapshots can exist for the same customer to track changes over time.
+    
+    Args:
+        db: Database session
+        customer_id: Customer UUID
+        consumer_id: Consumer UUID for ownership validation (required for security)
+    
+    Returns:
+        Created analytics snapshot
+        
+    Raises:
+        ValueError: If customer not found or doesn't belong to consumer
     """
-    # Get customer data
-    customer = db.query(Customer).filter(Customer.customer_id == customer_id).first()
+    # Get customer data with consumer_id filter for security
+    query = db.query(Customer).filter(Customer.customer_id == customer_id)
+    if consumer_id is not None:
+        query = query.filter(Customer.consumer_id == consumer_id)
+    
+    customer = query.first()
     if not customer:
         raise ValueError(f"Customer {customer_id} not found")
     
-    # Get total event count
-    total_events = db.query(func.count(CustomerEvent.event_id)).filter(
+    # Get total event count (filtered by consumer)
+    event_query = db.query(func.count(CustomerEvent.event_id)).filter(
         CustomerEvent.customer_id == customer_id
-    ).scalar() or 0
+    )
+    if consumer_id is not None:
+        event_query = event_query.filter(CustomerEvent.consumer_id == consumer_id)
+    total_events = event_query.scalar() or 0
     
-    # Get last event time
-    last_event = db.query(CustomerEvent).filter(
+    # Get last event time (filtered by consumer)
+    last_event_query = db.query(CustomerEvent).filter(
         CustomerEvent.customer_id == customer_id
-    ).order_by(desc(CustomerEvent.created_at)).first()
+    )
+    if consumer_id is not None:
+        last_event_query = last_event_query.filter(CustomerEvent.consumer_id == consumer_id)
+    last_event = last_event_query.order_by(desc(CustomerEvent.created_at)).first()
     last_event_time = last_event.created_at if last_event else None
     
-    # Get all tags as JSONB
-    tags = db.query(CustomerTag).filter(CustomerTag.customer_id == customer_id).all()
+    # Get all tags as JSONB (filtered by consumer)
+    tags_query = db.query(CustomerTag).filter(CustomerTag.customer_id == customer_id)
+    if consumer_id is not None:
+        tags_query = tags_query.filter(CustomerTag.consumer_id == consumer_id)
+    tags = tags_query.all()
     tags_json = {tag.tag_key: tag.tag_value for tag in sorted(tags, key=lambda t: t.tag_key)}
     
     # Calculate metrics (example metrics - can be expanded)
@@ -266,6 +467,7 @@ def create_customer_analytics_snapshot(db: Session, customer_id: UUID) -> Custom
     # Create analytics snapshot
     analytics_snapshot = CustomerAnalytics(
         customer_id=customer_id,
+        consumer_id=customer.consumer_id,  # Inherit from customer for security
         name=customer.name,
         status=customer.status,
         created_at=customer.created_at,
@@ -320,23 +522,25 @@ def create_consumer(db: Session, name: str, description: Optional[str] = None) -
     )
     db.add(db_api_key)
     
-    # Create consumer creation event
+    # Create consumer creation event with pending status (will be published by route handler)
     db_event = CustomerEvent(
         customer_id=db_consumer.consumer_id,  # Using consumer_id as customer_id for this event type
         consumer_id=db_consumer.consumer_id,
-        event_type="consumer.created",
+        event_type="consumer_created",
         source_service="POST: /consumer/data",
         payload_json={"consumer_id": str(db_consumer.consumer_id), "name": name},
         metadata_json={"created_by": "system"},
-        publish_status="published",
-        publish_try_count=0
+        publish_status="pending",  # Will be published by route handler
+        publish_try_count=1,
+        publish_last_tried_at=datetime.utcnow()
     )
     db.add(db_event)
     
     db.commit()
     db.refresh(db_consumer)
+    db.refresh(db_event)
     
-    return db_consumer, plaintext_key
+    return db_consumer, plaintext_key, db_event
 
 
 def get_consumer_by_id(db: Session, consumer_id: UUID) -> Optional[Consumer]:
@@ -374,6 +578,11 @@ def get_consumer_by_api_key(db: Session, api_key: str) -> Optional[Consumer]:
     ).first()
 
 
+def get_consumer_by_name(db: Session, name: str) -> Optional[Consumer]:
+    """Retrieve consumer by name."""
+    return db.query(Consumer).filter(Consumer.name == name).first()
+
+
 def rotate_api_key(db: Session, consumer_id: UUID) -> Optional[str]:
     """
     Deactivate existing active key and generate new one.
@@ -402,27 +611,30 @@ def rotate_api_key(db: Session, consumer_id: UUID) -> Optional[str]:
     )
     db.add(db_api_key)
     
-    # Create key rotation event
+    # Create key rotation event with pending status (will be published by route handler)
     db_event = CustomerEvent(
         customer_id=consumer_id,  # Using consumer_id as customer_id for this event type
         consumer_id=consumer_id,
-        event_type="consumer.key_rotated",
+        event_type="consumer_key_rotated",
         source_service="POST: /consumer/me/api-key/rotate",
         payload_json={"consumer_id": str(consumer_id)},
         metadata_json={},
-        publish_status="published",
-        publish_try_count=0
+        publish_status="pending",  # Will be published by route handler
+        publish_try_count=1,
+        publish_last_tried_at=datetime.utcnow()
     )
     db.add(db_event)
     
     db.commit()
-    return plaintext_key
+    db.refresh(db_event)
+    
+    return plaintext_key, db_event
 
 
-def deactivate_api_key(db: Session, consumer_id: UUID) -> bool:
+def deactivate_api_key(db: Session, consumer_id: UUID):
     """
     Deactivate consumer's active API key.
-    Returns True if key was deactivated, False otherwise.
+    Returns (success: bool, event: CustomerEvent | None).
     """
     result = db.query(ConsumerApiKey).filter(
         ConsumerApiKey.consumer_id == consumer_id,
@@ -430,22 +642,24 @@ def deactivate_api_key(db: Session, consumer_id: UUID) -> bool:
     ).update({"status": "deactivated"})
     
     if result > 0:
-        # Create key deactivation event
+        # Create key deactivation event with pending status (will be published by route handler)
         db_event = CustomerEvent(
             customer_id=consumer_id,
             consumer_id=consumer_id,
-            event_type="consumer.key_deactivated",
+            event_type="consumer_key_deactivated",
             source_service="POST: /consumer/me/api-key/deactivate",
             payload_json={"consumer_id": str(consumer_id)},
             metadata_json={},
-            publish_status="published",
-            publish_try_count=0
+            publish_status="pending",  # Will be published by route handler
+            publish_try_count=1,
+            publish_last_tried_at=datetime.utcnow()
         )
         db.add(db_event)
         db.commit()
-        return True
+        db.refresh(db_event)
+        return True, db_event
     
-    return False
+    return False, None
 
 
 def get_api_key_status(db: Session, consumer_id: UUID) -> Optional[ConsumerApiKey]:
@@ -456,23 +670,23 @@ def get_api_key_status(db: Session, consumer_id: UUID) -> Optional[ConsumerApiKe
     ).first()
 
 
-def change_consumer_status(db: Session, consumer_id: UUID, new_status: str) -> Optional[Consumer]:
+def change_consumer_status(db: Session, consumer_id: UUID, new_status: str):
     """
     Change consumer status (admin operation).
-    Returns updated consumer or None if not found.
+    Returns (consumer: Consumer | None, event: CustomerEvent | None).
     """
     consumer = get_consumer_by_id(db, consumer_id)
     if not consumer:
-        return None
+        return None, None
     
     old_status = consumer.status
     consumer.status = new_status
     
-    # Create status change event
+    # Create status change event with pending status (will be published by route handler)
     db_event = CustomerEvent(
         customer_id=consumer_id,
         consumer_id=consumer_id,
-        event_type="consumer.status_changed",
+        event_type="consumer_status_changed",
         source_service="POST: /admin/consumer/{consumer_id}/change-status",
         payload_json={
             "consumer_id": str(consumer_id),
@@ -480,11 +694,13 @@ def change_consumer_status(db: Session, consumer_id: UUID, new_status: str) -> O
             "new_status": new_status
         },
         metadata_json={},
-        publish_status="published",
-        publish_try_count=0
+        publish_status="pending",  # Will be published by route handler
+        publish_try_count=1,
+        publish_last_tried_at=datetime.utcnow()
     )
     db.add(db_event)
     
     db.commit()
     db.refresh(consumer)
-    return consumer
+    db.refresh(db_event)
+    return consumer, db_event

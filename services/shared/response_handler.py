@@ -18,6 +18,7 @@ def create_detail(status_code: int, description: str = "Success") -> Dict[str, s
         201: "CREATED",
         204: "NO_CONTENT",
         400: "BAD_REQUEST",
+        401: "UNAUTHORIZED",
         404: "NOT_FOUND",
         409: "CONFLICT",
         422: "UNPROCESSABLE_ENTITY",

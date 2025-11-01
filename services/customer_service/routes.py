@@ -49,16 +49,19 @@ router = APIRouter()
 
 
 @router.post("/customer/data", response_model=CustomerCreateStandardResponse, status_code=status.HTTP_201_CREATED)
-def create_customer(customer: CustomerCreate, request: Request, db: Session = Depends(get_db)):
+def create_customer(customer: CustomerCreate, request: Request, db: Session = Depends(get_db), consumer = Depends(verify_api_key)):
     """
     Create a new customer.
     
     - **name**: Customer name (required)
     
     Returns: Standardized response with customer_id, status, created_at
+    
+    Requires: X-API-Key header with valid consumer API key
     """
+    print(f"[DEBUG] Authenticated consumer: id={consumer.consumer_id}, name={consumer.name}")
     try:
-        db_customer = crud.create_customer(db, customer)
+        db_customer = crud.create_customer(db, customer, consumer.consumer_id)
         
         # Create event entry first with 'pending' status (outbox pattern)
         event = crud.create_customer_event(
@@ -78,7 +81,8 @@ def create_customer(customer: CustomerCreate, request: Request, db: Session = De
             published_at=None,
             publish_try_count=1,
             publish_last_tried_at=datetime.utcnow(),
-            publish_failure_reason=None
+            publish_failure_reason=None,
+            consumer_id=consumer.consumer_id  # Track which consumer created this event
         )
         
         # Now try to publish to RabbitMQ
@@ -93,7 +97,8 @@ def create_customer(customer: CustomerCreate, request: Request, db: Session = De
                     customer_id=db_customer.customer_id,
                     name=db_customer.name,
                     status=db_customer.status,
-                    created_at=event.created_at
+                    created_at=event.created_at,
+                    consumer_name=consumer.name
                 )
                 
                 if publish_success:
@@ -154,20 +159,23 @@ def create_customer(customer: CustomerCreate, request: Request, db: Session = De
 
 
 @router.get("/customer/data", response_model=CustomerGetStandardResponse)
-def get_customer(customer_id: UUID, request: Request, db: Session = Depends(get_db)):
+def get_customer(customer_id: UUID, request: Request, db: Session = Depends(get_db), consumer = Depends(verify_api_key)):
     """
     Retrieve customer information by ID.
     
     - **customer_id**: UUID of the customer (query parameter)
     
     Returns: Standardized response with customer_id, name, status, created_at, updated_at, tags
+    
+    Requires: X-API-Key header with valid consumer API key
     """
     try:
-        db_customer = crud.get_customer(db, customer_id)
+        # SECURITY: Filter by consumer_id to prevent cross-consumer data access
+        db_customer = crud.get_customer(db, customer_id, consumer.consumer_id)
         if db_customer is None:
             error_resp = error_response(
                 status.HTTP_404_NOT_FOUND,
-                f"Customer with id {customer_id} not found"
+                f"Customer with id {customer_id} not found"  # Don't reveal if customer exists for other consumer
             )
             
             # Log error to audit
@@ -185,8 +193,8 @@ def get_customer(customer_id: UUID, request: Request, db: Session = Depends(get_
                 content=error_resp
             )
         
-        # Get customer tags
-        customer_tags = crud.get_customer_tags(db, customer_id)
+        # SECURITY: Get customer tags with consumer_id validation
+        customer_tags = crud.get_customer_tags(db, customer_id, consumer.consumer_id)
         # Sort tags alphabetically by tag_key
         tags_dict = {tag.tag_key: tag.tag_value for tag in sorted(customer_tags, key=lambda t: t.tag_key)}
         
@@ -222,7 +230,7 @@ def get_customer(customer_id: UUID, request: Request, db: Session = Depends(get_
 
 
 @router.post("/customer/tag", response_model=CustomerTagStandardResponse, status_code=status.HTTP_201_CREATED)
-def create_customer_tags(tag_data: CustomerTagCreate, request: Request, db: Session = Depends(get_db)):
+def create_customer_tags(tag_data: CustomerTagCreate, request: Request, db: Session = Depends(get_db), consumer = Depends(verify_api_key)):
     """
     Create multiple tags for a customer.
     
@@ -231,14 +239,16 @@ def create_customer_tags(tag_data: CustomerTagCreate, request: Request, db: Sess
     - **tag_values**: List of tag values (positional correspondence with keys)
     
     Returns: Standardized response
+    
+    Requires: X-API-Key header with valid consumer API key
     """
     try:
-        # Validate customer exists
-        db_customer = crud.get_customer(db, tag_data.customer_id)
+        # SECURITY: Validate customer exists and belongs to this consumer
+        db_customer = crud.get_customer(db, tag_data.customer_id, consumer.consumer_id)
         if not db_customer:
             error_resp = error_response(
                 status.HTTP_404_NOT_FOUND,
-                f"Customer with id {tag_data.customer_id} not found"
+                f"Customer with id {tag_data.customer_id} not found"  # Don't reveal if exists for other consumer
             )
             log_error_to_audit(db, request, "customer_tag", tag_data.customer_id, "create_tags", error_resp)
             return JSONResponse(status_code=status.HTTP_404_NOT_FOUND, content=error_resp)
@@ -252,9 +262,9 @@ def create_customer_tags(tag_data: CustomerTagCreate, request: Request, db: Sess
             log_error_to_audit(db, request, "customer_tag", tag_data.customer_id, "create_tags", error_resp)
             return JSONResponse(status_code=status.HTTP_400_BAD_REQUEST, content=error_resp)
         
-        # Create tags
+        # Create tags (consumer_id from authenticated consumer)
         for key, value in zip(tag_data.tag_keys, tag_data.tag_values):
-            crud.create_customer_tag(db, tag_data.customer_id, key, value)
+            crud.create_customer_tag(db, tag_data.customer_id, key, value, consumer.consumer_id)
         
         return success_response({}, status.HTTP_201_CREATED)
     except Exception as e:
@@ -264,7 +274,7 @@ def create_customer_tags(tag_data: CustomerTagCreate, request: Request, db: Sess
 
 
 @router.get("/customer/tag-value", response_model=CustomerTagGetStandardResponse)
-def get_customer_tag_value(customer_id: UUID, tag_key: str, request: Request, db: Session = Depends(get_db)):
+def get_customer_tag_value(customer_id: UUID, tag_key: str, request: Request, db: Session = Depends(get_db), consumer = Depends(verify_api_key)):
     """
     Retrieve tag value for a customer by tag key.
     
@@ -272,13 +282,16 @@ def get_customer_tag_value(customer_id: UUID, tag_key: str, request: Request, db
     - **tag_key**: Tag key (query parameter)
     
     Returns: Tag value
+    
+    Requires: X-API-Key header with valid consumer API key
     """
     try:
-        db_tag = crud.get_customer_tag(db, customer_id, tag_key)
+        # SECURITY: Filter by consumer_id from authenticated API key
+        db_tag = crud.get_customer_tag(db, customer_id, tag_key, consumer.consumer_id)
         if not db_tag:
             error_resp = error_response(
                 status.HTTP_404_NOT_FOUND,
-                f"Tag '{tag_key}' not found for customer {customer_id}"
+                f"Tag '{tag_key}' not found for customer {customer_id}"  # Don't reveal if exists for other consumer
             )
             log_error_to_audit(db, request, "customer_tag", customer_id, "get_tag_value", error_resp)
             return JSONResponse(status_code=status.HTTP_404_NOT_FOUND, content=error_resp)
@@ -292,7 +305,7 @@ def get_customer_tag_value(customer_id: UUID, tag_key: str, request: Request, db
 
 
 @router.delete("/customer/tag", response_model=CustomerTagStandardResponse, status_code=status.HTTP_200_OK)
-def delete_customer_tag(tag_delete: CustomerTagDelete, request: Request, db: Session = Depends(get_db)):
+def delete_customer_tag(tag_delete: CustomerTagDelete, request: Request, db: Session = Depends(get_db), consumer = Depends(verify_api_key)):
     """
     Delete a tag for a customer.
     
@@ -300,13 +313,16 @@ def delete_customer_tag(tag_delete: CustomerTagDelete, request: Request, db: Ses
     - **tag_key**: Tag key to delete
     
     Returns: Standardized response
+    
+    Requires: X-API-Key header with valid consumer API key
     """
     try:
-        deleted = crud.delete_customer_tag(db, tag_delete.customer_id, tag_delete.tag_key)
+        # SECURITY: Filter by consumer_id from authenticated API key
+        deleted = crud.delete_customer_tag(db, tag_delete.customer_id, tag_delete.tag_key, consumer.consumer_id)
         if not deleted:
             error_resp = error_response(
                 status.HTTP_404_NOT_FOUND,
-                f"Tag '{tag_delete.tag_key}' not found for customer {tag_delete.customer_id}"
+                f"Tag '{tag_delete.tag_key}' not found for customer {tag_delete.customer_id}"  # Don't reveal if exists for other consumer
             )
             log_error_to_audit(db, request, "customer_tag", tag_delete.customer_id, "delete_tag", error_resp)
             return JSONResponse(status_code=status.HTTP_404_NOT_FOUND, content=error_resp)
@@ -319,7 +335,7 @@ def delete_customer_tag(tag_delete: CustomerTagDelete, request: Request, db: Ses
 
 
 @router.patch("/customer/tag-key", response_model=CustomerTagStandardResponse, status_code=status.HTTP_200_OK)
-def update_customer_tag_key(tag_update: CustomerTagKeyUpdate, request: Request, db: Session = Depends(get_db)):
+def update_customer_tag_key(tag_update: CustomerTagKeyUpdate, request: Request, db: Session = Depends(get_db), consumer = Depends(verify_api_key)):
     """
     Update tag key for a customer.
     
@@ -328,13 +344,16 @@ def update_customer_tag_key(tag_update: CustomerTagKeyUpdate, request: Request, 
     - **new_tag_key**: New tag key
     
     Returns: Standardized response
+    
+    Requires: X-API-Key header with valid consumer API key
     """
     try:
-        updated_tag = crud.update_customer_tag_key(db, tag_update.customer_id, tag_update.tag_key, tag_update.new_tag_key)
+        # SECURITY: Filter by consumer_id from authenticated API key
+        updated_tag = crud.update_customer_tag_key(db, tag_update.customer_id, tag_update.tag_key, tag_update.new_tag_key, consumer.consumer_id)
         if not updated_tag:
             error_resp = error_response(
                 status.HTTP_404_NOT_FOUND,
-                f"Tag '{tag_update.tag_key}' not found for customer {tag_update.customer_id}"
+                f"Tag '{tag_update.tag_key}' not found for customer {tag_update.customer_id}"  # Don't reveal if exists for other consumer
             )
             log_error_to_audit(db, request, "customer_tag", tag_update.customer_id, "update_tag_key", error_resp)
             return JSONResponse(status_code=status.HTTP_404_NOT_FOUND, content=error_resp)
@@ -347,7 +366,7 @@ def update_customer_tag_key(tag_update: CustomerTagKeyUpdate, request: Request, 
 
 
 @router.patch("/customer/tag-value", response_model=CustomerTagStandardResponse, status_code=status.HTTP_200_OK)
-def update_customer_tag_value(tag_update: CustomerTagValueUpdate, request: Request, db: Session = Depends(get_db)):
+def update_customer_tag_value(tag_update: CustomerTagValueUpdate, request: Request, db: Session = Depends(get_db), consumer = Depends(verify_api_key)):
     """
     Update tag value for a customer.
     
@@ -356,13 +375,16 @@ def update_customer_tag_value(tag_update: CustomerTagValueUpdate, request: Reque
     - **new_tag_value**: New tag value
     
     Returns: Standardized response
+    
+    Requires: X-API-Key header with valid consumer API key
     """
     try:
-        updated_tag = crud.update_customer_tag_value(db, tag_update.customer_id, tag_update.tag_key, tag_update.new_tag_value)
+        # SECURITY: Filter by consumer_id from authenticated API key
+        updated_tag = crud.update_customer_tag_value(db, tag_update.customer_id, tag_update.tag_key, tag_update.new_tag_value, consumer.consumer_id)
         if not updated_tag:
             error_resp = error_response(
                 status.HTTP_404_NOT_FOUND,
-                f"Tag '{tag_update.tag_key}' not found for customer {tag_update.customer_id}"
+                f"Tag '{tag_update.tag_key}' not found for customer {tag_update.customer_id}"  # Don't reveal if exists for other consumer
             )
             log_error_to_audit(db, request, "customer_tag", tag_update.customer_id, "update_tag_value", error_resp)
             return JSONResponse(status_code=status.HTTP_404_NOT_FOUND, content=error_resp)
@@ -375,7 +397,7 @@ def update_customer_tag_value(tag_update: CustomerTagValueUpdate, request: Reque
 
 
 @router.post("/customer/analytics", response_model=CustomerTagStandardResponse, status_code=status.HTTP_201_CREATED)
-def create_customer_analytics(analytics_data: CustomerAnalyticsCreate, request: Request, db: Session = Depends(get_db)):
+def create_customer_analytics(analytics_data: CustomerAnalyticsCreate, request: Request, db: Session = Depends(get_db), consumer = Depends(verify_api_key)):
     """
     Create an analytics snapshot for a customer.
     
@@ -390,17 +412,19 @@ def create_customer_analytics(analytics_data: CustomerAnalyticsCreate, request: 
     - **customer_id**: UUID of the customer
     
     Returns: Standardized response with empty data object
+    
+    Requires: X-API-Key header with valid consumer API key
     """
     try:
-        # Create analytics snapshot (this validates customer exists)
-        crud.create_customer_analytics_snapshot(db, analytics_data.customer_id)
+        # SECURITY: Create analytics snapshot with consumer_id validation from authenticated API key
+        crud.create_customer_analytics_snapshot(db, analytics_data.customer_id, consumer.consumer_id)
         
         return success_response({}, status.HTTP_201_CREATED)
     except ValueError as e:
-        # Customer not found
+        # Customer not found or doesn't belong to this consumer
         error_resp = error_response(
             status.HTTP_404_NOT_FOUND,
-            str(e)
+            str(e)  # Error message doesn't reveal if customer exists for other consumer
         )
         log_error_to_audit(db, request, "customer_analytics", analytics_data.customer_id, "create_snapshot", error_resp)
         return JSONResponse(status_code=status.HTTP_404_NOT_FOUND, content=error_resp)
@@ -411,7 +435,7 @@ def create_customer_analytics(analytics_data: CustomerAnalyticsCreate, request: 
 
 
 @router.delete("/customer/data", response_model=CustomerDeleteStandardResponse, status_code=status.HTTP_200_OK)
-def delete_customer(customer_id: UUID, request: Request, db: Session = Depends(get_db)):
+def delete_customer(customer_id: UUID, request: Request, db: Session = Depends(get_db), consumer = Depends(verify_api_key)):
     """
     Delete customer by ID (archive + physical deletion).
     
@@ -424,14 +448,16 @@ def delete_customer(customer_id: UUID, request: Request, db: Session = Depends(g
     - **customer_id**: UUID of the customer (query parameter)
     
     Returns: Standardized response with 200 OK if successful, 404 if not found
+    
+    Requires: X-API-Key header with valid consumer API key
     """
     try:
-        # Step 1: Validate customer exists
-        db_customer = crud.get_customer(db, customer_id)
+        # Step 1: SECURITY - Validate customer exists and belongs to this consumer
+        db_customer = crud.get_customer(db, customer_id, consumer.consumer_id)
         if not db_customer:
             error_resp = error_response(
                 status.HTTP_404_NOT_FOUND,
-                f"Customer with id {customer_id} not found"
+                f"Customer with id {customer_id} not found"  # Don't reveal if exists for other consumer
             )
             
             # Log error to audit
@@ -449,8 +475,8 @@ def delete_customer(customer_id: UUID, request: Request, db: Session = Depends(g
                 content=error_resp
             )
         
-        # Step 2: Capture snapshot (customer + tags)
-        customer_tags = crud.get_customer_tags(db, customer_id)
+        # Step 2: SECURITY - Capture snapshot with consumer_id validation
+        customer_tags = crud.get_customer_tags(db, customer_id, consumer.consumer_id)
         
         snapshot = {
             "customer": {
@@ -499,7 +525,8 @@ def delete_customer(customer_id: UUID, request: Request, db: Session = Depends(g
             published_at=None,
             publish_try_count=1,
             publish_last_tried_at=datetime.utcnow(),
-            publish_failure_reason=None
+            publish_failure_reason=None,
+            consumer_id=consumer.consumer_id
         )
         
         # Step 5: Try to publish to RabbitMQ
@@ -513,7 +540,8 @@ def delete_customer(customer_id: UUID, request: Request, db: Session = Depends(g
                     customer_id=customer_id,
                     name=db_customer.name,
                     status=db_customer.status,
-                    created_at=event.created_at
+                    created_at=event.created_at,
+                    consumer_name=consumer.name
                 )
                 
                 if publish_success:
@@ -540,11 +568,11 @@ def delete_customer(customer_id: UUID, request: Request, db: Session = Depends(g
             import traceback
             traceback.print_exc()
         
-        # Step 6: Delete tags
-        tags_deleted = crud.delete_customer_tags(db, customer_id)
+        # Step 6: SECURITY - Delete tags with consumer_id validation
+        tags_deleted = crud.delete_customer_tags(db, customer_id, consumer.consumer_id)
         
-        # Step 7: Delete customer
-        crud.delete_customer(db, customer_id)
+        # Step 7: SECURITY - Delete customer with consumer_id validation
+        crud.delete_customer(db, customer_id, consumer.consumer_id)
         
         return success_response(
             {
@@ -577,7 +605,7 @@ def delete_customer(customer_id: UUID, request: Request, db: Session = Depends(g
 
 
 @router.patch("/customer/change-status", response_model=CustomerStatusChangeStandardResponse, status_code=status.HTTP_200_OK)
-def change_customer_status(status_change: CustomerStatusChange, request: Request, db: Session = Depends(get_db)):
+def change_customer_status(status_change: CustomerStatusChange, request: Request, db: Session = Depends(get_db), consumer = Depends(verify_api_key)):
     """
     Change customer status (ACTIVE/INACTIVE).
     
@@ -585,14 +613,17 @@ def change_customer_status(status_change: CustomerStatusChange, request: Request
     - **status**: New status (ACTIVE or INACTIVE)
     
     Returns: Standardized response with detail only
+    
+    Requires: X-API-Key header with valid consumer API key
     """
     try:
-        db_customer = crud.get_customer(db, status_change.customer_id)
+        # SECURITY: Validate customer exists and belongs to this consumer
+        db_customer = crud.get_customer(db, status_change.customer_id, consumer.consumer_id)
         
         if db_customer is None:
             error_resp = error_response(
                 status.HTTP_404_NOT_FOUND,
-                f"Customer with id {status_change.customer_id} not found"
+                f"Customer with id {status_change.customer_id} not found"  # Don't reveal if exists for other consumer
             )
             
             # Log error to audit
@@ -635,8 +666,8 @@ def change_customer_status(status_change: CustomerStatusChange, request: Request
         # Store old status for event
         old_status = db_customer.status
         
-        # Update status
-        crud.update_customer_status(db, status_change.customer_id, status_change.status)
+        # SECURITY: Update status with consumer_id validation
+        crud.update_customer_status(db, status_change.customer_id, status_change.status, consumer.consumer_id)
         
         # Refresh to get updated timestamp
         db.refresh(db_customer)
@@ -659,7 +690,8 @@ def change_customer_status(status_change: CustomerStatusChange, request: Request
             published_at=None,
             publish_try_count=1,
             publish_last_tried_at=datetime.utcnow(),
-            publish_failure_reason=None
+            publish_failure_reason=None,
+            consumer_id=consumer.consumer_id
         )
         
         # Try to publish to RabbitMQ
@@ -673,7 +705,8 @@ def change_customer_status(status_change: CustomerStatusChange, request: Request
                     customer_id=status_change.customer_id,
                     name=db_customer.name,
                     status=status_change.status,
-                    created_at=event.created_at
+                    created_at=event.created_at,
+                    consumer_name=consumer.name
                 )
                 
                 if publish_success:
@@ -801,14 +834,21 @@ def resend_pending_events(resend_request: EventResendRequest, request: Request, 
                 name = payload.get("name")
                 status_val = payload.get("status")
                 
-                # Publish to RabbitMQ
+                # Lookup consumer name for queue routing
+                consumer_name = 'system_default'  # Default fallback
+                if event.consumer_id:
+                    consumer = crud.get_consumer_by_id(db, event.consumer_id)
+                    consumer_name = consumer.name if consumer else 'system_default'
+                
+                # Publish to RabbitMQ with consumer-specific queue
                 publish_success = publisher.publish_event(
                     event_id=event.event_id,
                     event_type=event.event_type,
                     customer_id=customer_id,
                     name=name,
                     status=status_val,
-                    created_at=event.created_at
+                    created_at=event.created_at,
+                    consumer_name=consumer_name
                 )
                 
                 if publish_success:
@@ -871,6 +911,17 @@ def resend_pending_events(resend_request: EventResendRequest, request: Request, 
             status.HTTP_500_INTERNAL_SERVER_ERROR,
             f"Failed to resend events: {str(e)}"
         )
+        
+        # Log error to audit
+        log_error_to_audit(
+            db=db,
+            request=request,
+            entity="event",
+            entity_id=None,
+            action="resend_pending_events",
+            error_response=error_resp
+        )
+        
         return JSONResponse(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             content=error_resp
@@ -927,6 +978,17 @@ def get_events_health(request: Request, db: Session = Depends(get_db)):
             status.HTTP_500_INTERNAL_SERVER_ERROR,
             f"Failed to get events health: {str(e)}"
         )
+        
+        # Log error to audit
+        log_error_to_audit(
+            db=db,
+            request=request,
+            entity="event",
+            entity_id=None,
+            action="get_events_health",
+            error_response=error_resp
+        )
+        
         return JSONResponse(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             content=error_resp
@@ -941,6 +1003,7 @@ def confirm_event_delivery(confirmation: EventConfirmDeliveryRequest, request: R
     - **status**: Processing status ('received', 'processed', or 'failed')
     - **received_at**: Timestamp when consumer received the message
     - **failure_reason**: Optional - reason if processing failed
+    - **consumer_name**: Name of the consumer processing this event
     
     Returns: Success confirmation
     """
@@ -955,6 +1018,17 @@ def confirm_event_delivery(confirmation: EventConfirmDeliveryRequest, request: R
                 status.HTTP_404_NOT_FOUND,
                 f"Event {confirmation.event_id} not found"
             )
+            
+            # Log error to audit
+            log_error_to_audit(
+                db=db,
+                request=request,
+                entity="event",
+                entity_id=confirmation.event_id,
+                action="confirm_event_delivery",
+                error_response=error_resp
+            )
+            
             return JSONResponse(
                 status_code=status.HTTP_404_NOT_FOUND,
                 content=error_resp
@@ -969,9 +1043,13 @@ def confirm_event_delivery(confirmation: EventConfirmDeliveryRequest, request: R
             # Already processed - return success (idempotent)
             return success_response({}, status.HTTP_200_OK)
         
+        # Look up consumer by name
+        consumer = crud.get_consumer_by_name(db, confirmation.consumer_name)
+        consumer_id = consumer.consumer_id if consumer else None
+        
         # Create consumer receipt record
         receipt = ConsumerEventReceipt(
-            consumer_id=None,  # Will be populated when authentication is added
+            consumer_id=consumer_id,
             event_id=confirmation.event_id,
             customer_id=event.customer_id,
             event_type=event.event_type,
@@ -999,6 +1077,17 @@ def confirm_event_delivery(confirmation: EventConfirmDeliveryRequest, request: R
             status.HTTP_500_INTERNAL_SERVER_ERROR,
             f"Failed to confirm delivery: {str(e)}"
         )
+        
+        # Log error to audit
+        log_error_to_audit(
+            db=db,
+            request=request,
+            entity="event",
+            entity_id=None,
+            action="confirm_event_delivery",
+            error_response=error_resp
+        )
+        
         return JSONResponse(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             content=error_resp
@@ -1084,14 +1173,21 @@ def redeliver_pending_events(redeliver_request: EventRedeliverRequest, request: 
                 name = payload.get("name")
                 status_val = payload.get("status")
                 
-                # Republish to RabbitMQ
+                # Lookup consumer name for queue routing
+                consumer_name = 'system_default'  # Default fallback
+                if event.consumer_id:
+                    consumer = crud.get_consumer_by_id(db, event.consumer_id)
+                    consumer_name = consumer.name if consumer else 'system_default'
+                
+                # Republish to RabbitMQ with consumer-specific queue
                 publish_success = publisher.publish_event(
                     event_id=event.event_id,
                     event_type=event.event_type,
                     customer_id=customer_id,
                     name=name,
                     status=status_val,
-                    created_at=event.created_at
+                    created_at=event.created_at,
+                    consumer_name=consumer_name
                 )
                 
                 if publish_success:
@@ -1152,6 +1248,17 @@ def redeliver_pending_events(redeliver_request: EventRedeliverRequest, request: 
             status.HTTP_500_INTERNAL_SERVER_ERROR,
             f"Failed to redeliver events: {str(e)}"
         )
+        
+        # Log error to audit
+        log_error_to_audit(
+            db=db,
+            request=request,
+            entity="event",
+            entity_id=None,
+            action="redeliver_pending_events",
+            error_response=error_resp
+        )
+        
         return JSONResponse(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             content=error_resp
@@ -1170,12 +1277,42 @@ def create_consumer_endpoint(consumer: ConsumerCreate, request: Request, db: Ses
     """
     try:
         from services.customer_service.schemas import ConsumerCreateResponseData
+        from services.shared.event_publisher import get_event_publisher
         
-        db_consumer, plaintext_key = crud.create_consumer(
+        db_consumer, plaintext_key, event = crud.create_consumer(
             db=db,
             name=consumer.name,
             description=consumer.description
         )
+        
+        # Try to publish consumer_created event to RabbitMQ
+        try:
+            publisher = get_event_publisher()
+            if publisher:
+                publish_success = publisher.publish_event(
+                    event_id=event.event_id,
+                    event_type="consumer_created",
+                    customer_id=db_consumer.consumer_id,  # Using consumer_id as customer_id
+                    name=db_consumer.name,
+                    status=db_consumer.status,
+                    created_at=event.created_at,
+                    consumer_name=db_consumer.name  # Consumer's name
+                )
+                
+                if publish_success:
+                    event.publish_status = "published"
+                    event.published_at = datetime.utcnow()
+                    event.deliver_try_count = 1
+                    event.deliver_last_tried_at = datetime.utcnow()
+                else:
+                    event.publish_failure_reason = "RabbitMQ publish returned False"
+                db.commit()
+            else:
+                event.publish_failure_reason = "EventPublisher connection is None"
+                db.commit()
+        except Exception as mq_error:
+            event.publish_failure_reason = f"{type(mq_error).__name__}: {str(mq_error)}"
+            db.commit()
         
         response_data = ConsumerCreateResponseData(
             consumer_id=db_consumer.consumer_id,
@@ -1203,8 +1340,9 @@ def rotate_consumer_key(request: Request, db: Session = Depends(get_db), consume
     """
     try:
         from services.customer_service.schemas import ConsumerRotateKeyResponseData
+        from services.shared.event_publisher import get_event_publisher
         
-        plaintext_key = crud.rotate_api_key(db, consumer.consumer_id)
+        plaintext_key, event = crud.rotate_api_key(db, consumer.consumer_id)
         
         if not plaintext_key:
             error_resp = error_response(
@@ -1215,6 +1353,35 @@ def rotate_consumer_key(request: Request, db: Session = Depends(get_db), consume
                 status_code=status.HTTP_404_NOT_FOUND,
                 content=error_resp
             )
+        
+        # Try to publish consumer_key_rotated event to RabbitMQ
+        try:
+            publisher = get_event_publisher()
+            if publisher:
+                publish_success = publisher.publish_event(
+                    event_id=event.event_id,
+                    event_type="consumer_key_rotated",
+                    customer_id=consumer.consumer_id,  # Using consumer_id as customer_id
+                    name=consumer.name,
+                    status=consumer.status,
+                    created_at=event.created_at,
+                    consumer_name=consumer.name
+                )
+                
+                if publish_success:
+                    event.publish_status = "published"
+                    event.published_at = datetime.utcnow()
+                    event.deliver_try_count = 1
+                    event.deliver_last_tried_at = datetime.utcnow()
+                else:
+                    event.publish_failure_reason = "RabbitMQ publish returned False"
+                db.commit()
+            else:
+                event.publish_failure_reason = "EventPublisher connection is None"
+                db.commit()
+        except Exception as mq_error:
+            event.publish_failure_reason = f"{type(mq_error).__name__}: {str(mq_error)}"
+            db.commit()
         
         response_data = ConsumerRotateKeyResponseData(api_key=plaintext_key)
         return success_response(response_data.model_dump(), status.HTTP_200_OK)
@@ -1310,7 +1477,9 @@ def deactivate_consumer_key(request: Request, db: Session = Depends(get_db), con
     After this call, key becomes invalid.
     """
     try:
-        success = crud.deactivate_api_key(db, consumer.consumer_id)
+        from services.shared.event_publisher import get_event_publisher
+        
+        success, event = crud.deactivate_api_key(db, consumer.consumer_id)
         
         if not success:
             error_resp = error_response(
@@ -1321,6 +1490,35 @@ def deactivate_consumer_key(request: Request, db: Session = Depends(get_db), con
                 status_code=status.HTTP_404_NOT_FOUND,
                 content=error_resp
             )
+        
+        # Try to publish consumer_key_deactivated event to RabbitMQ
+        try:
+            publisher = get_event_publisher()
+            if publisher:
+                publish_success = publisher.publish_event(
+                    event_id=event.event_id,
+                    event_type="consumer_key_deactivated",
+                    customer_id=consumer.consumer_id,  # Using consumer_id as customer_id
+                    name=consumer.name,
+                    status=consumer.status,
+                    created_at=event.created_at,
+                    consumer_name=consumer.name
+                )
+                
+                if publish_success:
+                    event.publish_status = "published"
+                    event.published_at = datetime.utcnow()
+                    event.deliver_try_count = 1
+                    event.deliver_last_tried_at = datetime.utcnow()
+                else:
+                    event.publish_failure_reason = "RabbitMQ publish returned False"
+                db.commit()
+            else:
+                event.publish_failure_reason = "EventPublisher connection is None"
+                db.commit()
+        except Exception as mq_error:
+            event.publish_failure_reason = f"{type(mq_error).__name__}: {str(mq_error)}"
+            db.commit()
         
         return success_response({}, status.HTTP_200_OK)
         
@@ -1347,7 +1545,9 @@ def change_consumer_status_admin(
     TODO: Add admin authentication middleware.
     """
     try:
-        updated_consumer = crud.change_consumer_status(db, consumer_id, status_change.status)
+        from services.shared.event_publisher import get_event_publisher
+        
+        updated_consumer, event = crud.change_consumer_status(db, consumer_id, status_change.status)
         
         if not updated_consumer:
             error_resp = error_response(
@@ -1358,6 +1558,35 @@ def change_consumer_status_admin(
                 status_code=status.HTTP_404_NOT_FOUND,
                 content=error_resp
             )
+        
+        # Try to publish consumer_status_changed event to RabbitMQ
+        try:
+            publisher = get_event_publisher()
+            if publisher:
+                publish_success = publisher.publish_event(
+                    event_id=event.event_id,
+                    event_type="consumer_status_changed",
+                    customer_id=consumer_id,  # Using consumer_id as customer_id
+                    name=updated_consumer.name,
+                    status=updated_consumer.status,
+                    created_at=event.created_at,
+                    consumer_name=updated_consumer.name
+                )
+                
+                if publish_success:
+                    event.publish_status = "published"
+                    event.published_at = datetime.utcnow()
+                    event.deliver_try_count = 1
+                    event.deliver_last_tried_at = datetime.utcnow()
+                else:
+                    event.publish_failure_reason = "RabbitMQ publish returned False"
+                db.commit()
+            else:
+                event.publish_failure_reason = "EventPublisher connection is None"
+                db.commit()
+        except Exception as mq_error:
+            event.publish_failure_reason = f"{type(mq_error).__name__}: {str(mq_error)}"
+            db.commit()
         
         return success_response({}, status.HTTP_200_OK)
         
