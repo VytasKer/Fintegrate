@@ -670,6 +670,199 @@ Some issues to fix:
 
 ----------------------------------------------------------------------------------------
 
+Next development step would be:
+
+Step 3: Add Rate Limiting (1 hour)
+Configure Traefik rate limiter
+Test: Send 200 requests rapidly → see 429 errors
+Implement per-IP vs per-API-key limits
+Key Concepts: DDoS prevention, throttling strategies, backpressure
+
+This is the last step in fintegrate development phase - API Gateway	Add Traefik or Kong to route API + secure endpoints	Customer API	Gateway routing, security, observability.
+
+Do not code, act as an integration architect and describe the changes needed for this step.
+
+----------------------------------------------------------------------------------------
+
+Let's begin with the implementation of:
+
+2. Rate Limiting Strategy
+
+Global IP-based (Anti-DDoS)
+
+100 requests/minute per source IP
+Burst allowance: 20 requests
+Applied to all endpoints via Traefik middleware
+Purpose: Prevent volumetric attacks
+API Key-based (Fair Use)
+
+Do not code yet, I want to understand and learn what are we doing.
+
+----------------------------------------------------------------------------------------
+
+Continue with the implementation of both layers - ideally put restrictions as configurable variables for more convenient testing with smaller amount of requests.
+
+Give instructions on how should I prepare and do testing via Postman auto test functionality - how to prepare data, configure calling, etc. (I have basic knowledge of load testing via Postman).
+
+----------------------------------------------------------------------------------------
+
+Next step in fintegrate project is:
+Proxy/Load balancing test	Simulate two customer service instances; test load distribution	API Gateway	Networking, scaling basics
+
+Check current codebase, do not code, just present as a university professor what kind of tasks we should achieve in this step.
+Keep it brief.
+
+----------------------------------------------------------------------------------------
+
+1. Multi-Instance Deployment (Infrastructure)
+Modify docker-compose.yml to spawn two customer service containers
+Configure distinct container names (customer_service_1, customer_service_2)
+Both instances connect to shared PostgreSQL, RabbitMQ, Redis (stateless pattern validation)
+
+2. Traefik Load Balancer Configuration (Networking)
+Verify Traefik auto-discovers both service instances via Docker provider
+Confirm round-robin or least-connections algorithm (default: round-robin)
+No manual configuration needed (service discovery advantage)
+
+3. Observability Setup (Verification)
+Add container identification to logs: LOG_INSTANCE_ID=instance_1 environment variable
+Instrument routes to log which instance processes each request
+Observe Traefik dashboard showing both healthy backends
+
+4. Load Distribution Testing (Validation)
+Send 100 sequential requests via Traefik gateway (http://localhost/customer/data)
+Analyze logs: expect ~50 requests per instance (±10% variance acceptable)
+Verify no session affinity (each request independently routed)
+
+5. Failure Resilience (High Availability)
+Stop customer_service_1: docker stop fintegrate-customer-service-1
+Send 20 requests → confirm 100% routed to customer_service_2
+Restart stopped instance → verify automatic reintegration into pool
+
+6. Shared State Validation (Stateless Architecture)
+Create customer via instance 1 (check logs for routing)
+Retrieve same customer → may hit instance 2
+Confirm no data inconsistency (proves shared PostgreSQL correct)
+
+----------------------------------------------------------------------------------------
+
+Task 2: Analytics Schema Review & Enhancement
+Objective: Ensure customer_analytics table supports our ETL use case
+
+Actions:
+
+Review current schema in database-context.txt
+Decide on metrics to track:
+Total customers per consumer
+Active vs inactive customer counts
+Event counts by type (creation, deletion, status_change)
+Average customer lifetime (days since creation)
+Add watermark tracking mechanism:
+Option A: New table etl_watermarks (tracks last processed timestamp per job)
+Option B: Use Airflow Variables/XComs
+Create migration if schema changes needed
+Learning:
+
+Snapshot pattern: Each ETL run creates new row (vs updating existing)
+Metrics vs dimensions: What goes in JSONB vs dedicated columns
+Watermarking: How to track "last processed event timestamp"
+Validation:
+
+Document analytics schema design in comments
+Confirm snapshot_timestamp, consumer_id, metrics_json fields sufficient
+
+Task 3: Basic ETL DAG Implementation
+Objective: Create first Airflow DAG that runs simple customer aggregation
+
+Actions:
+
+Create airflow/dags/customer_analytics_etl.py
+Define DAG with schedule: @daily (runs at midnight)
+Implement tasks:
+Task 1: Extract customer counts per consumer
+Task 2: Extract event counts per consumer + event type
+Task 3: Insert aggregated metrics into customer_analytics
+Use PythonOperator with PostgreSQL connections
+Add logging for each task
+Learning:
+
+Airflow DAG syntax (with DAG() context manager)
+Task dependencies (task1 >> task2 >> task3)
+PythonOperator vs PostgresOperator
+Database cursors and parameterized queries
+Airflow execution dates vs actual dates
+Validation:
+
+DAG appears in Airflow UI
+Manual trigger succeeds
+New rows appear in customer_analytics table
+Check Airflow logs for execution details
+
+Task 4: Incremental Processing with Watermarks
+Objective: Process only new events since last ETL run (not full table scan)
+
+Actions:
+
+Create etl_watermarks table:
+Modify DAG to:
+Read watermark at start (SELECT last_processed_timestamp WHERE job_name='customer_analytics_etl')
+Filter events: WHERE created_at > watermark_timestamp
+Update watermark after successful processing
+Handle first run (no watermark exists → process all historical data)
+Learning:
+
+Incremental ETL vs full refresh patterns
+Idempotency: Re-running same time window produces same result
+Timestamp comparison pitfalls (timezone handling, microseconds)
+Transaction isolation for watermark updates
+Validation:
+
+Create test customer + events
+Trigger ETL → verify new data processed
+Check watermark updated in etl_watermarks table
+Re-trigger immediately → should process zero new events
+
+Task 5: Error Handling & Retry Logic
+Objective: Make ETL resilient to transient failures
+
+Actions:
+
+Add Airflow retry configuration to DAG:
+Implement graceful error handling:
+Database connection failures
+Empty result sets (no new data)
+Schema validation errors
+Add data quality checks:
+Verify row counts > 0 before insert
+Check for duplicate snapshots (same consumer + timestamp)
+Use Airflow XComs to pass metadata between tasks
+Learning:
+
+Airflow retry mechanisms (exponential backoff)
+Task failure vs DAG failure
+XComs for inter-task communication
+Data quality assertions in ETL
+Validation:
+
+Simulate DB connection failure → verify retry attempts in logs
+Run ETL twice in same minute → verify duplicate detection
+Check Airflow UI for task success/failure states
+
+Task 6: Multi-Consumer Analytics
+Objective: Generate per-consumer and global analytics snapshots
+
+Task 7: Historical Backfill DAG
+Objective: Create separate DAG for one-time historical data processing
+
+Task 8: Airflow Monitoring & Logging
+Objective: Add observability to ETL pipeline
+
+----------------------------------------------------------------------------------------
+
+----------------------------------------------------------------------------------------
+
+----------------------------------------------------------------------------------------
+
 ----------------------------------------------------------------------------------------
 
 ----------------------------------------------------------------------------------------

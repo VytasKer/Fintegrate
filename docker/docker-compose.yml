@@ -196,9 +196,86 @@ services:
     networks:
       - fintegrate-network
 
+  # Airflow Init (One-time setup)
+  airflow-init:
+    image: apache/airflow:2.7.3-python3.11
+    container_name: fintegrate-airflow-init
+    environment:
+      AIRFLOW__CORE__EXECUTOR: LocalExecutor
+      AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: postgresql+psycopg2://fintegrate_user:fintegrate_pass@postgres:5432/fintegrate_db
+      AIRFLOW__CORE__FERNET_KEY: 'YlCImzjge_TeZc9jFMdkNvD8gSGQj9dXeGA34Gf3OdM='  # Static key for development
+      AIRFLOW__CORE__LOAD_EXAMPLES: 'false'
+      AIRFLOW__WEBSERVER__SECRET_KEY: 'fintegrate_secret_key_dev'
+      _AIRFLOW_DB_MIGRATE: 'true'
+      _AIRFLOW_WWW_USER_CREATE: 'true'
+      _AIRFLOW_WWW_USER_USERNAME: 'admin'
+      _AIRFLOW_WWW_USER_PASSWORD: 'admin'
+    volumes:
+      - ../airflow/dags:/opt/airflow/dags
+      - airflow_logs:/opt/airflow/logs
+    depends_on:
+      - postgres
+    networks:
+      - fintegrate-network
+    command: version  # Runs DB migration then exits
+
+  # Airflow Webserver (UI)
+  airflow-webserver:
+    image: apache/airflow:2.7.3-python3.11
+    container_name: fintegrate-airflow-webserver
+    environment:
+      AIRFLOW__CORE__EXECUTOR: LocalExecutor
+      AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: postgresql+psycopg2://fintegrate_user:fintegrate_pass@postgres:5432/fintegrate_db
+      AIRFLOW__CORE__FERNET_KEY: 'YlCImzjge_TeZc9jFMdkNvD8gSGQj9dXeGA34Gf3OdM='
+      AIRFLOW__CORE__LOAD_EXAMPLES: 'false'
+      AIRFLOW__WEBSERVER__SECRET_KEY: 'fintegrate_secret_key_dev'
+    ports:
+      - "8081:8080"  # Airflow UI (avoiding conflict with Traefik dashboard on 8080)
+    volumes:
+      - ../airflow/dags:/opt/airflow/dags
+      - airflow_logs:/opt/airflow/logs
+    depends_on:
+      airflow-init:
+        condition: service_completed_successfully
+      postgres:
+        condition: service_started
+    networks:
+      - fintegrate-network
+    command: webserver
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "--fail", "http://localhost:8080/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # Airflow Scheduler (DAG execution engine)
+  airflow-scheduler:
+    image: apache/airflow:2.7.3-python3.11
+    container_name: fintegrate-airflow-scheduler
+    environment:
+      AIRFLOW__CORE__EXECUTOR: LocalExecutor
+      AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: postgresql+psycopg2://fintegrate_user:fintegrate_pass@postgres:5432/fintegrate_db
+      AIRFLOW__CORE__FERNET_KEY: 'YlCImzjge_TeZc9jFMdkNvD8gSGQj9dXeGA34Gf3OdM='
+      AIRFLOW__CORE__LOAD_EXAMPLES: 'false'
+      AIRFLOW__WEBSERVER__SECRET_KEY: 'fintegrate_secret_key_dev'
+    volumes:
+      - ../airflow/dags:/opt/airflow/dags
+      - airflow_logs:/opt/airflow/logs
+    depends_on:
+      airflow-init:
+        condition: service_completed_successfully
+      postgres:
+        condition: service_started
+    networks:
+      - fintegrate-network
+    command: scheduler
+    restart: unless-stopped
+
 volumes:
   postgres_data:
   rabbitmq_data:
+  airflow_logs:
 
 networks:
   fintegrate-network:
