@@ -618,7 +618,7 @@ def rotate_api_key(db: Session, consumer_id: UUID) -> Optional[str]:
         event_type="consumer_key_rotated",
         source_service="POST: /consumer/me/api-key/rotate",
         payload_json={"consumer_id": str(consumer_id)},
-        metadata_json={},
+        metadata_json={"rotated_at": datetime.utcnow().isoformat(), "rotated_by": "consumer"},
         publish_status="pending",  # Will be published by route handler
         publish_try_count=1,
         publish_last_tried_at=datetime.utcnow()
@@ -649,7 +649,7 @@ def deactivate_api_key(db: Session, consumer_id: UUID):
             event_type="consumer_key_deactivated",
             source_service="POST: /consumer/me/api-key/deactivate",
             payload_json={"consumer_id": str(consumer_id)},
-            metadata_json={},
+            metadata_json={"deactivated_at": datetime.utcnow().isoformat(), "deactivated_by": "consumer"},
             publish_status="pending",  # Will be published by route handler
             publish_try_count=1,
             publish_last_tried_at=datetime.utcnow()
@@ -693,7 +693,7 @@ def change_consumer_status(db: Session, consumer_id: UUID, new_status: str):
             "old_status": old_status,
             "new_status": new_status
         },
-        metadata_json={},
+        metadata_json={"changed_at": datetime.utcnow().isoformat(), "changed_by": "admin"},
         publish_status="pending",  # Will be published by route handler
         publish_try_count=1,
         publish_last_tried_at=datetime.utcnow()

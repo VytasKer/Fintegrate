@@ -3,6 +3,8 @@
 
 version: '3.8'
 
+name: fintegrate
+
 services:
   # API Gateway
   traefik:
@@ -40,12 +42,12 @@ services:
       - fintegrate-network
     command: redis-server --maxmemory 64mb --maxmemory-policy allkeys-lru
 
-  # Customer Service (FastAPI)
-  customer_service:
+  # Customer Service Instance 1 (FastAPI)
+  customer_service_1:
     build:
       context: ..
       dockerfile: docker/Dockerfile.customer_service
-    container_name: fintegrate-customer-service
+    container_name: fintegrate-customer-service-1
     environment:
       DATABASE_URL: postgresql://fintegrate_user:fintegrate_pass@postgres:5432/fintegrate_db
       RABBITMQ_HOST: rabbitmq
@@ -59,6 +61,8 @@ services:
       RATE_LIMIT_IP_BURST: 500
       RATE_LIMIT_API_KEY_PER_MINUTE: 50
       RATE_LIMIT_API_KEY_BURST: 500
+      # Instance identification for logs
+      INSTANCE_ID: instance_1
     depends_on:
       - postgres
       - rabbitmq
@@ -68,7 +72,49 @@ services:
     labels:
       # Enable Traefik for this service
       - "traefik.enable=true"
-      # HTTP router configuration
+      # HTTP router configuration (same name for both instances)
+      - "traefik.http.routers.customer-service.rule=PathPrefix(`/customer`) || PathPrefix(`/events`) || PathPrefix(`/consumer`) || PathPrefix(`/admin`)"
+      - "traefik.http.routers.customer-service.entrypoints=web"
+      # IP-based rate limiting middleware (test-friendly values)
+      - "traefik.http.middlewares.ratelimit-ip.ratelimit.average=100"
+      - "traefik.http.middlewares.ratelimit-ip.ratelimit.period=1m"
+      - "traefik.http.middlewares.ratelimit-ip.ratelimit.burst=20"
+      # Apply middleware to router
+      - "traefik.http.routers.customer-service.middlewares=ratelimit-ip"
+      # Service configuration
+      - "traefik.http.services.customer-service.loadbalancer.server.port=8000"
+
+  # Customer Service Instance 2 (FastAPI)
+  customer_service_2:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile.customer_service
+    container_name: fintegrate-customer-service-2
+    environment:
+      DATABASE_URL: postgresql://fintegrate_user:fintegrate_pass@postgres:5432/fintegrate_db
+      RABBITMQ_HOST: rabbitmq
+      RABBITMQ_PORT: 5672
+      RABBITMQ_USER: fintegrate_user
+      RABBITMQ_PASS: fintegrate_pass
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      # Rate limiting configuration (test-friendly values)
+      RATE_LIMIT_IP_PER_MINUTE: 500
+      RATE_LIMIT_IP_BURST: 500
+      RATE_LIMIT_API_KEY_PER_MINUTE: 50
+      RATE_LIMIT_API_KEY_BURST: 500
+      # Instance identification for logs
+      INSTANCE_ID: instance_2
+    depends_on:
+      - postgres
+      - rabbitmq
+      - redis
+    networks:
+      - fintegrate-network
+    labels:
+      # Enable Traefik for this service
+      - "traefik.enable=true"
+      # HTTP router configuration (IDENTICAL to instance 1)
       - "traefik.http.routers.customer-service.rule=PathPrefix(`/customer`) || PathPrefix(`/events`) || PathPrefix(`/consumer`) || PathPrefix(`/admin`)"
       - "traefik.http.routers.customer-service.entrypoints=web"
       # IP-based rate limiting middleware (test-friendly values)
@@ -91,11 +137,12 @@ services:
       RABBITMQ_PORT: 5672
       RABBITMQ_USER: fintegrate_user
       RABBITMQ_PASS: fintegrate_pass
-      CUSTOMER_SERVICE_URL: http://customer_service:8000
+      CUSTOMER_SERVICE_URL: http://traefik:80
       CONSUMER_NAME: system_default
     depends_on:
       - rabbitmq
-      - customer_service
+      - customer_service_1
+      - customer_service_2
     networks:
       - fintegrate-network
     restart: unless-stopped
@@ -111,11 +158,12 @@ services:
       RABBITMQ_PORT: 5672
       RABBITMQ_USER: fintegrate_user
       RABBITMQ_PASS: fintegrate_pass
-      CUSTOMER_SERVICE_URL: http://customer_service:8000
+      CUSTOMER_SERVICE_URL: http://traefik:80
       CONSUMER_NAME: consumer_test001
     depends_on:
       - rabbitmq
-      - customer_service
+      - customer_service_1
+      - customer_service_2
     networks:
       - fintegrate-network
     restart: unless-stopped

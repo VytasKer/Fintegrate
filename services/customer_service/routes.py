@@ -4,6 +4,7 @@ from fastapi.exceptions import RequestValidationError
 from sqlalchemy.orm import Session
 from uuid import UUID
 import uuid
+import os
 from datetime import datetime
 from services.customer_service.database import get_db
 from services.customer_service.schemas import (
@@ -47,6 +48,9 @@ from services.customer_service.middleware import verify_api_key, rate_limit_midd
 
 router = APIRouter()
 
+# Get instance ID from environment (for load balancing verification)
+INSTANCE_ID = os.getenv('INSTANCE_ID', 'unknown')
+
 
 @router.post("/customer/data", response_model=CustomerCreateStandardResponse, status_code=status.HTTP_201_CREATED)
 def create_customer(customer: CustomerCreate, request: Request, db: Session = Depends(get_db), consumer = Depends(verify_api_key), _ = Depends(rate_limit_middleware)):
@@ -59,6 +63,7 @@ def create_customer(customer: CustomerCreate, request: Request, db: Session = De
     
     Requires: X-API-Key header with valid consumer API key
     """
+    print(f"[{INSTANCE_ID}] Processing POST /customer/data - consumer: {consumer.name}")
     print(f"[DEBUG] Authenticated consumer: id={consumer.consumer_id}, name={consumer.name}")
     try:
         db_customer = crud.create_customer(db, customer, consumer.consumer_id)
@@ -169,6 +174,7 @@ def get_customer(customer_id: UUID, request: Request, db: Session = Depends(get_
     
     Requires: X-API-Key header with valid consumer API key
     """
+    print(f"[{INSTANCE_ID}] Processing GET /customer/data - customer_id: {customer_id}")
     try:
         # SECURITY: Filter by consumer_id to prevent cross-consumer data access
         db_customer = crud.get_customer(db, customer_id, consumer.consumer_id)
