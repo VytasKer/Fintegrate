@@ -30,6 +30,16 @@ services:
     labels:
       - "traefik.enable=true"
 
+  # Redis (Rate limiting state storage)
+  redis:
+    image: redis:7-alpine
+    container_name: fintegrate-redis
+    ports:
+      - "6379:6379"
+    networks:
+      - fintegrate-network
+    command: redis-server --maxmemory 64mb --maxmemory-policy allkeys-lru
+
   # Customer Service (FastAPI)
   customer_service:
     build:
@@ -42,9 +52,17 @@ services:
       RABBITMQ_PORT: 5672
       RABBITMQ_USER: fintegrate_user
       RABBITMQ_PASS: fintegrate_pass
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      # Rate limiting configuration (test-friendly values)
+      RATE_LIMIT_IP_PER_MINUTE: 500
+      RATE_LIMIT_IP_BURST: 500
+      RATE_LIMIT_API_KEY_PER_MINUTE: 50
+      RATE_LIMIT_API_KEY_BURST: 500
     depends_on:
       - postgres
       - rabbitmq
+      - redis
     networks:
       - fintegrate-network
     labels:
@@ -53,6 +71,12 @@ services:
       # HTTP router configuration
       - "traefik.http.routers.customer-service.rule=PathPrefix(`/customer`) || PathPrefix(`/events`) || PathPrefix(`/consumer`) || PathPrefix(`/admin`)"
       - "traefik.http.routers.customer-service.entrypoints=web"
+      # IP-based rate limiting middleware (test-friendly values)
+      - "traefik.http.middlewares.ratelimit-ip.ratelimit.average=100"
+      - "traefik.http.middlewares.ratelimit-ip.ratelimit.period=1m"
+      - "traefik.http.middlewares.ratelimit-ip.ratelimit.burst=20"
+      # Apply middleware to router
+      - "traefik.http.routers.customer-service.middlewares=ratelimit-ip"
       # Service configuration
       - "traefik.http.services.customer-service.loadbalancer.server.port=8000"
 

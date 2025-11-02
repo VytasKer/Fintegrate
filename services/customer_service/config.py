@@ -21,6 +21,14 @@ class Settings(BaseSettings):
     service_name: str = os.getenv("SERVICE_NAME", "customer_service")
     service_version: str = os.getenv("SERVICE_VERSION", "1.0.0")
     
+    # Rate Limiting Configuration
+    redis_host: str = os.getenv("REDIS_HOST", "redis")
+    redis_port: int = int(os.getenv("REDIS_PORT", "6379"))
+    rate_limit_ip_per_minute: int = int(os.getenv("RATE_LIMIT_IP_PER_MINUTE", "10"))
+    rate_limit_ip_burst: int = int(os.getenv("RATE_LIMIT_IP_BURST", "5"))
+    rate_limit_api_key_per_minute: int = int(os.getenv("RATE_LIMIT_API_KEY_PER_MINUTE", "50"))
+    rate_limit_api_key_burst: int = int(os.getenv("RATE_LIMIT_API_KEY_BURST", "10"))
+    
     def get_database_url(self) -> str:
         """Get database URL, preferring environment variable."""
         if self.database_url:

@@ -43,13 +43,13 @@ from services.customer_service import crud
 from services.shared.response_handler import success_response, error_response
 from services.shared.audit_logger import log_error_to_audit
 from services.shared.event_publisher import get_event_publisher
-from services.customer_service.middleware import verify_api_key
+from services.customer_service.middleware import verify_api_key, rate_limit_middleware
 
 router = APIRouter()
 
 
 @router.post("/customer/data", response_model=CustomerCreateStandardResponse, status_code=status.HTTP_201_CREATED)
-def create_customer(customer: CustomerCreate, request: Request, db: Session = Depends(get_db), consumer = Depends(verify_api_key)):
+def create_customer(customer: CustomerCreate, request: Request, db: Session = Depends(get_db), consumer = Depends(verify_api_key), _ = Depends(rate_limit_middleware)):
     """
     Create a new customer.
     
@@ -159,7 +159,7 @@ def create_customer(customer: CustomerCreate, request: Request, db: Session = De
 
 
 @router.get("/customer/data", response_model=CustomerGetStandardResponse)
-def get_customer(customer_id: UUID, request: Request, db: Session = Depends(get_db), consumer = Depends(verify_api_key)):
+def get_customer(customer_id: UUID, request: Request, db: Session = Depends(get_db), consumer = Depends(verify_api_key), _ = Depends(rate_limit_middleware)):
     """
     Retrieve customer information by ID.
     
@@ -230,7 +230,7 @@ def get_customer(customer_id: UUID, request: Request, db: Session = Depends(get_
 
 
 @router.post("/customer/tag", response_model=CustomerTagStandardResponse, status_code=status.HTTP_201_CREATED)
-def create_customer_tags(tag_data: CustomerTagCreate, request: Request, db: Session = Depends(get_db), consumer = Depends(verify_api_key)):
+def create_customer_tags(tag_data: CustomerTagCreate, request: Request, db: Session = Depends(get_db), consumer = Depends(verify_api_key), _ = Depends(rate_limit_middleware)):
     """
     Create multiple tags for a customer.
     
@@ -274,7 +274,7 @@ def create_customer_tags(tag_data: CustomerTagCreate, request: Request, db: Sess
 
 
 @router.get("/customer/tag-value", response_model=CustomerTagGetStandardResponse)
-def get_customer_tag_value(customer_id: UUID, tag_key: str, request: Request, db: Session = Depends(get_db), consumer = Depends(verify_api_key)):
+def get_customer_tag_value(customer_id: UUID, tag_key: str, request: Request, db: Session = Depends(get_db), consumer = Depends(verify_api_key), _ = Depends(rate_limit_middleware)):
     """
     Retrieve tag value for a customer by tag key.
     
@@ -305,7 +305,7 @@ def get_customer_tag_value(customer_id: UUID, tag_key: str, request: Request, db
 
 
 @router.delete("/customer/tag", response_model=CustomerTagStandardResponse, status_code=status.HTTP_200_OK)
-def delete_customer_tag(tag_delete: CustomerTagDelete, request: Request, db: Session = Depends(get_db), consumer = Depends(verify_api_key)):
+def delete_customer_tag(tag_delete: CustomerTagDelete, request: Request, db: Session = Depends(get_db), consumer = Depends(verify_api_key), _ = Depends(rate_limit_middleware)):
     """
     Delete a tag for a customer.
     
@@ -335,7 +335,7 @@ def delete_customer_tag(tag_delete: CustomerTagDelete, request: Request, db: Ses
 
 
 @router.patch("/customer/tag-key", response_model=CustomerTagStandardResponse, status_code=status.HTTP_200_OK)
-def update_customer_tag_key(tag_update: CustomerTagKeyUpdate, request: Request, db: Session = Depends(get_db), consumer = Depends(verify_api_key)):
+def update_customer_tag_key(tag_update: CustomerTagKeyUpdate, request: Request, db: Session = Depends(get_db), consumer = Depends(verify_api_key), _ = Depends(rate_limit_middleware)):
     """
     Update tag key for a customer.
     
@@ -366,7 +366,7 @@ def update_customer_tag_key(tag_update: CustomerTagKeyUpdate, request: Request, 
 
 
 @router.patch("/customer/tag-value", response_model=CustomerTagStandardResponse, status_code=status.HTTP_200_OK)
-def update_customer_tag_value(tag_update: CustomerTagValueUpdate, request: Request, db: Session = Depends(get_db), consumer = Depends(verify_api_key)):
+def update_customer_tag_value(tag_update: CustomerTagValueUpdate, request: Request, db: Session = Depends(get_db), consumer = Depends(verify_api_key), _ = Depends(rate_limit_middleware)):
     """
     Update tag value for a customer.
     
@@ -397,7 +397,7 @@ def update_customer_tag_value(tag_update: CustomerTagValueUpdate, request: Reque
 
 
 @router.post("/customer/analytics", response_model=CustomerTagStandardResponse, status_code=status.HTTP_201_CREATED)
-def create_customer_analytics(analytics_data: CustomerAnalyticsCreate, request: Request, db: Session = Depends(get_db), consumer = Depends(verify_api_key)):
+def create_customer_analytics(analytics_data: CustomerAnalyticsCreate, request: Request, db: Session = Depends(get_db), consumer = Depends(verify_api_key), _ = Depends(rate_limit_middleware)):
     """
     Create an analytics snapshot for a customer.
     
@@ -435,7 +435,7 @@ def create_customer_analytics(analytics_data: CustomerAnalyticsCreate, request: 
 
 
 @router.delete("/customer/data", response_model=CustomerDeleteStandardResponse, status_code=status.HTTP_200_OK)
-def delete_customer(customer_id: UUID, request: Request, db: Session = Depends(get_db), consumer = Depends(verify_api_key)):
+def delete_customer(customer_id: UUID, request: Request, db: Session = Depends(get_db), consumer = Depends(verify_api_key), _ = Depends(rate_limit_middleware)):
     """
     Delete customer by ID (archive + physical deletion).
     
@@ -605,7 +605,7 @@ def delete_customer(customer_id: UUID, request: Request, db: Session = Depends(g
 
 
 @router.patch("/customer/change-status", response_model=CustomerStatusChangeStandardResponse, status_code=status.HTTP_200_OK)
-def change_customer_status(status_change: CustomerStatusChange, request: Request, db: Session = Depends(get_db), consumer = Depends(verify_api_key)):
+def change_customer_status(status_change: CustomerStatusChange, request: Request, db: Session = Depends(get_db), consumer = Depends(verify_api_key), _ = Depends(rate_limit_middleware)):
     """
     Change customer status (ACTIVE/INACTIVE).
     
@@ -1333,7 +1333,7 @@ def create_consumer_endpoint(consumer: ConsumerCreate, request: Request, db: Ses
 
 
 @router.post("/consumer/me/api-key/rotate", response_model=ConsumerRotateKeyStandardResponse, status_code=status.HTTP_200_OK)
-def rotate_consumer_key(request: Request, db: Session = Depends(get_db), consumer = Depends(verify_api_key)):
+def rotate_consumer_key(request: Request, db: Session = Depends(get_db), consumer = Depends(verify_api_key), _ = Depends(rate_limit_middleware)):
     """
     Rotate API key for authenticated consumer.
     Deactivates old key and generates new one.
@@ -1398,7 +1398,7 @@ def rotate_consumer_key(request: Request, db: Session = Depends(get_db), consume
 
 
 @router.get("/consumer/me", response_model=ConsumerGetStandardResponse, status_code=status.HTTP_200_OK)
-def get_consumer_me(request: Request, db: Session = Depends(get_db), consumer = Depends(verify_api_key)):
+def get_consumer_me(request: Request, db: Session = Depends(get_db), consumer = Depends(verify_api_key), _ = Depends(rate_limit_middleware)):
     """
     Get authenticated consumer's data.
     Consumer extracted from X-API-Key header.
@@ -1429,7 +1429,7 @@ def get_consumer_me(request: Request, db: Session = Depends(get_db), consumer = 
 
 
 @router.get("/consumer/me/api-key", response_model=ConsumerKeyStatusStandardResponse, status_code=status.HTTP_200_OK)
-def get_consumer_key_status(request: Request, db: Session = Depends(get_db), consumer = Depends(verify_api_key)):
+def get_consumer_key_status(request: Request, db: Session = Depends(get_db), consumer = Depends(verify_api_key), _ = Depends(rate_limit_middleware)):
     """
     Get authenticated consumer's API key metadata.
     Does not return key value, only status/timestamps.
@@ -1471,7 +1471,7 @@ def get_consumer_key_status(request: Request, db: Session = Depends(get_db), con
 
 
 @router.post("/consumer/me/api-key/deactivate", response_model=CustomerTagStandardResponse, status_code=status.HTTP_200_OK)
-def deactivate_consumer_key(request: Request, db: Session = Depends(get_db), consumer = Depends(verify_api_key)):
+def deactivate_consumer_key(request: Request, db: Session = Depends(get_db), consumer = Depends(verify_api_key), _ = Depends(rate_limit_middleware)):
     """
     Deactivate authenticated consumer's API key.
     After this call, key becomes invalid.
