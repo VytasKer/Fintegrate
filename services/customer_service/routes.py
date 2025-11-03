@@ -18,7 +18,6 @@ from services.customer_service.schemas import (
     CustomerTagDelete,
     CustomerTagKeyUpdate,
     CustomerTagValueUpdate,
-    CustomerAnalyticsCreate,
     CustomerCreateStandardResponse,
     CustomerGetStandardResponse,
     CustomerDeleteStandardResponse,
@@ -402,42 +401,8 @@ def update_customer_tag_value(tag_update: CustomerTagValueUpdate, request: Reque
         return JSONResponse(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, content=error_resp)
 
 
-@router.post("/customer/analytics", response_model=CustomerTagStandardResponse, status_code=status.HTTP_201_CREATED)
-def create_customer_analytics(analytics_data: CustomerAnalyticsCreate, request: Request, db: Session = Depends(get_db), consumer = Depends(verify_api_key), _ = Depends(rate_limit_middleware)):
-    """
-    Create an analytics snapshot for a customer.
-    
-    Captures time-lapsed data including:
-    - Customer info (name, status, created_at)
-    - Event statistics (total_events, last_event_time)
-    - Tags snapshot (tags_json)
-    - Calculated metrics (metrics_json)
-    
-    Multiple snapshots can exist for the same customer to enable trend analysis.
-    
-    - **customer_id**: UUID of the customer
-    
-    Returns: Standardized response with empty data object
-    
-    Requires: X-API-Key header with valid consumer API key
-    """
-    try:
-        # SECURITY: Create analytics snapshot with consumer_id validation from authenticated API key
-        crud.create_customer_analytics_snapshot(db, analytics_data.customer_id, consumer.consumer_id)
-        
-        return success_response({}, status.HTTP_201_CREATED)
-    except ValueError as e:
-        # Customer not found or doesn't belong to this consumer
-        error_resp = error_response(
-            status.HTTP_404_NOT_FOUND,
-            str(e)  # Error message doesn't reveal if customer exists for other consumer
-        )
-        log_error_to_audit(db, request, "customer_analytics", analytics_data.customer_id, "create_snapshot", error_resp)
-        return JSONResponse(status_code=status.HTTP_404_NOT_FOUND, content=error_resp)
-    except Exception as e:
-        error_resp = error_response(status.HTTP_500_INTERNAL_SERVER_ERROR, f"Failed to create analytics snapshot: {str(e)}")
-        log_error_to_audit(db, request, "customer_analytics", analytics_data.customer_id, "create_snapshot", error_resp)
-        return JSONResponse(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, content=error_resp)
+# Deprecated: POST /customer/analytics removed (replaced by Airflow ETL job for consumer-level aggregates)
+# Per-customer analytics snapshots no longer supported - use consumer_analytics table via scheduled ETL
 
 
 @router.delete("/customer/data", response_model=CustomerDeleteStandardResponse, status_code=status.HTTP_200_OK)

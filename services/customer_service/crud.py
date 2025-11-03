@@ -7,7 +7,7 @@ import secrets
 import hashlib
 from services.customer_service.models import (
     Customer, CustomerEvent, CustomerTag, CustomerArchive, 
-    AuditLog, CustomerAnalytics, Consumer, ConsumerApiKey
+    AuditLog, Consumer, ConsumerApiKey
 )
 from services.customer_service.schemas import CustomerCreate
 
@@ -400,87 +400,10 @@ def update_customer_tag_value(db: Session, customer_id: UUID, tag_key: str, new_
     return None
 
 
-def create_customer_analytics_snapshot(db: Session, customer_id: UUID, consumer_id: UUID | None = None) -> CustomerAnalytics:
-    """
-    Create an analytics snapshot for a customer.
-    Captures current state: name, status, event count, tags, and calculated metrics.
-    Multiple snapshots can exist for the same customer to track changes over time.
-    
-    Args:
-        db: Database session
-        customer_id: Customer UUID
-        consumer_id: Consumer UUID for ownership validation (required for security)
-    
-    Returns:
-        Created analytics snapshot
-        
-    Raises:
-        ValueError: If customer not found or doesn't belong to consumer
-    """
-    # Get customer data with consumer_id filter for security
-    query = db.query(Customer).filter(Customer.customer_id == customer_id)
-    if consumer_id is not None:
-        query = query.filter(Customer.consumer_id == consumer_id)
-    
-    customer = query.first()
-    if not customer:
-        raise ValueError(f"Customer {customer_id} not found")
-    
-    # Get total event count (filtered by consumer)
-    event_query = db.query(func.count(CustomerEvent.event_id)).filter(
-        CustomerEvent.customer_id == customer_id
-    )
-    if consumer_id is not None:
-        event_query = event_query.filter(CustomerEvent.consumer_id == consumer_id)
-    total_events = event_query.scalar() or 0
-    
-    # Get last event time (filtered by consumer)
-    last_event_query = db.query(CustomerEvent).filter(
-        CustomerEvent.customer_id == customer_id
-    )
-    if consumer_id is not None:
-        last_event_query = last_event_query.filter(CustomerEvent.consumer_id == consumer_id)
-    last_event = last_event_query.order_by(desc(CustomerEvent.created_at)).first()
-    last_event_time = last_event.created_at if last_event else None
-    
-    # Get all tags as JSONB (filtered by consumer)
-    tags_query = db.query(CustomerTag).filter(CustomerTag.customer_id == customer_id)
-    if consumer_id is not None:
-        tags_query = tags_query.filter(CustomerTag.consumer_id == consumer_id)
-    tags = tags_query.all()
-    tags_json = {tag.tag_key: tag.tag_value for tag in sorted(tags, key=lambda t: t.tag_key)}
-    
-    # Calculate metrics (example metrics - can be expanded)
-    from datetime import datetime
-    account_age_days = 0
-    if customer.created_at:
-        age_delta = datetime.now() - customer.created_at
-        account_age_days = age_delta.days
-    
-    metrics_json = {
-        "total_events": total_events,
-        "tags_count": len(tags),
-        "account_age_days": account_age_days,
-        "status": customer.status
-    }
-    
-    # Create analytics snapshot
-    analytics_snapshot = CustomerAnalytics(
-        customer_id=customer_id,
-        consumer_id=customer.consumer_id,  # Inherit from customer for security
-        name=customer.name,
-        status=customer.status,
-        created_at=customer.created_at,
-        last_event_time=last_event_time,
-        total_events=total_events,
-        tags_json=tags_json,
-        metrics_json=metrics_json
-    )
-    
-    db.add(analytics_snapshot)
-    db.commit()
-    db.refresh(analytics_snapshot)
-    return analytics_snapshot
+# Deprecated: create_customer_analytics_snapshot removed
+# Analytics aggregation now handled by Airflow ETL job (consumer-level, not per-customer)
+# Table renamed: customer_analytics -> consumer_analytics
+# See: airflow/dags/consumer_analytics_etl.py
 
 
 # Consumer Management Functions

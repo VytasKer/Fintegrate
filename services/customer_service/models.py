@@ -79,21 +79,12 @@ class AuditLog(Base):
     timestamp = Column(TIMESTAMP, nullable=False, server_default=func.current_timestamp())
 
 
-class CustomerAnalytics(Base):
-    """CustomerAnalytics model for analytics snapshots and time-series analysis."""
-    __tablename__ = "customer_analytics"
-    
-    analytics_id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    customer_id = Column(UUID(as_uuid=True), nullable=False)
-    consumer_id = Column(UUID(as_uuid=True), nullable=False)  # CRITICAL: Multi-tenant data isolation
-    name = Column(String(255))
-    status = Column(String(50))
-    created_at = Column(TIMESTAMP)
-    last_event_time = Column(TIMESTAMP)
-    total_events = Column(Integer, default=0)
-    tags_json = Column(JSONB)
-    metrics_json = Column(JSONB)
-    snapshot_at = Column(TIMESTAMP, nullable=False, server_default=func.current_timestamp())
+# Deprecated: CustomerAnalytics model removed (table renamed to consumer_analytics)
+# Model no longer used - analytics handled by Airflow ETL job
+# New table schema managed in migration 20251103_0900
+# class CustomerAnalytics(Base):
+#     __tablename__ = "consumer_analytics"
+#     analytics_id, consumer_id, snapshot_timestamp, metrics_json
 
 
 class ConsumerEventReceipt(Base):

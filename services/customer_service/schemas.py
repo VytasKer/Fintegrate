@@ -76,9 +76,8 @@ class CustomerTagValueUpdate(BaseModel):
     new_tag_value: str
 
 
-class CustomerAnalyticsCreate(BaseModel):
-    """Schema for POST /customer/analytics - Create analytics snapshot"""
-    customer_id: UUID
+# Deprecated: CustomerAnalyticsCreate schema removed (endpoint deprecated)
+# Analytics now handled by Airflow ETL job
 
 
 class Detail(BaseModel):
