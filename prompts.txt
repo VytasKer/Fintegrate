@@ -746,104 +746,28 @@ Confirm no data inconsistency (proves shared PostgreSQL correct)
 
 ----------------------------------------------------------------------------------------
 
-Task 2: Analytics Schema Review & Enhancement
-Objective: Ensure customer_analytics table supports our ETL use case
-
-Actions:
-
-Review current schema in database-context.txt
-Decide on metrics to track:
-Total customers per consumer
-Active vs inactive customer counts
-Event counts by type (creation, deletion, status_change)
-Average customer lifetime (days since creation)
-Add watermark tracking mechanism:
-Option A: New table etl_watermarks (tracks last processed timestamp per job)
-Option B: Use Airflow Variables/XComs
-Create migration if schema changes needed
-Learning:
-
-Snapshot pattern: Each ETL run creates new row (vs updating existing)
-Metrics vs dimensions: What goes in JSONB vs dedicated columns
-Watermarking: How to track "last processed event timestamp"
-Validation:
-
-Document analytics schema design in comments
-Confirm snapshot_timestamp, consumer_id, metrics_json fields sufficient
-
-Task 3: Basic ETL DAG Implementation
-Objective: Create first Airflow DAG that runs simple customer aggregation
-
-Actions:
-
-Create airflow/dags/customer_analytics_etl.py
-Define DAG with schedule: @daily (runs at midnight)
-Implement tasks:
-Task 1: Extract customer counts per consumer
-Task 2: Extract event counts per consumer + event type
-Task 3: Insert aggregated metrics into customer_analytics
-Use PythonOperator with PostgreSQL connections
-Add logging for each task
-Learning:
-
-Airflow DAG syntax (with DAG() context manager)
-Task dependencies (task1 >> task2 >> task3)
-PythonOperator vs PostgresOperator
-Database cursors and parameterized queries
-Airflow execution dates vs actual dates
-Validation:
-
-DAG appears in Airflow UI
-Manual trigger succeeds
-New rows appear in customer_analytics table
-Check Airflow logs for execution details
-
-Task 4: Incremental Processing with Watermarks
-Objective: Process only new events since last ETL run (not full table scan)
-
-Actions:
-
-Create etl_watermarks table:
-Modify DAG to:
-Read watermark at start (SELECT last_processed_timestamp WHERE job_name='customer_analytics_etl')
-Filter events: WHERE created_at > watermark_timestamp
-Update watermark after successful processing
-Handle first run (no watermark exists → process all historical data)
-Learning:
-
-Incremental ETL vs full refresh patterns
-Idempotency: Re-running same time window produces same result
-Timestamp comparison pitfalls (timezone handling, microseconds)
-Transaction isolation for watermark updates
-Validation:
-
-Create test customer + events
-Trigger ETL → verify new data processed
-Check watermark updated in etl_watermarks table
-Re-trigger immediately → should process zero new events
-
 Task 5: Error Handling & Retry Logic
 Objective: Make ETL resilient to transient failures
 
 Actions:
-
 Add Airflow retry configuration to DAG:
 Implement graceful error handling:
 Database connection failures
 Empty result sets (no new data)
 Schema validation errors
+
 Add data quality checks:
 Verify row counts > 0 before insert
 Check for duplicate snapshots (same consumer + timestamp)
 Use Airflow XComs to pass metadata between tasks
-Learning:
 
+Learning:
 Airflow retry mechanisms (exponential backoff)
 Task failure vs DAG failure
 XComs for inter-task communication
 Data quality assertions in ETL
-Validation:
 
+Validation:
 Simulate DB connection failure → verify retry attempts in logs
 Run ETL twice in same minute → verify duplicate detection
 Check Airflow UI for task success/failure states
@@ -859,9 +783,65 @@ Objective: Add observability to ETL pipeline
 
 ----------------------------------------------------------------------------------------
 
-----------------------------------------------------------------------------------------
+Task 2: Analytics Schema Review & Enhancement
+Objective: Ensure customer_analytics table supports our ETL use case
+
+Actions:
+Review current schema in database-context.txt and migrations
+Currently "customer_analytics" table in each row we have separate customer info rather than aggregated - maybe it is okay.
+
+Decide on metrics to track:
+Total customers per consumer
+Active vs inactive customer counts
+Event counts by type (creation, deletion, status_change)
+Average customer lifetime (days since creation)
+
+Add watermark tracking mechanism:
+New table "etl_watermarks" (tracks last processed timestamp per job) - maybe more general name for the table would be more suitable, like "airflow_jobs", as in the future we might have more jobs for different tasks.
+Create migration if schema changes needed
+
+Learning:
+Snapshot pattern: Each ETL run creates new row (vs updating existing)
+Metrics vs dimensions: What goes in JSONB vs dedicated columns
+Watermarking: How to track "last processed event timestamp"
+
+Validation:
+Document analytics schema design in comments
+Confirm snapshot_timestamp, consumer_id, metrics_json fields sufficient
 
 ----------------------------------------------------------------------------------------
+
+Task 3: Basic ETL DAG Implementation
+Objective: Create first Airflow DAG that runs simple customer aggregation
+
+Actions:
+Create airflow/dags/customer_analytics_etl.py
+Define DAG with schedule: @daily (runs at midnight) - for testing purposes would be great to be able to configure execution time.
+
+Implement tasks:
+Task 1: Extract customer counts per consumer
+Task 2: Extract event counts per consumer + event type
+Task 3: Insert aggregated metrics into customer_analytics
+Use PythonOperator with PostgreSQL connections
+Add logging for each task
+
+Learning:
+Airflow DAG syntax (with DAG() context manager)
+Task dependencies (task1 >> task2 >> task3)
+PythonOperator vs PostgresOperator
+Database cursors and parameterized queries
+Airflow execution dates vs actual dates
+
+Validation:
+DAG appears in Airflow UI
+Manual trigger succeeds
+New rows appear in customer_analytics table
+Check Airflow logs for execution details
+
+----------------------------------------------------------------------------------------
+
+Trigger DAG manually:
+docker exec fintegrate-airflow-scheduler airflow dags trigger consumer_analytics_etl
 
 ----------------------------------------------------------------------------------------
 
