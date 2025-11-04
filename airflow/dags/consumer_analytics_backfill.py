@@ -239,17 +239,19 @@ def process_historical_period(**context):
                     }
                 }
                 
-                # Insert with idempotency (ON CONFLICT DO NOTHING)
+                # Insert (idempotent via partial unique indexes)
                 insert_query = """
                     INSERT INTO consumer_analytics (analytics_id, consumer_id, snapshot_timestamp, metrics_json)
                     VALUES (gen_random_uuid(), %s, %s, %s::jsonb)
-                    ON CONFLICT (consumer_id, snapshot_timestamp) DO NOTHING
                 """
                 
-                cursor.execute(insert_query, (consumer_id, snapshot_timestamp, psycopg2.extras.Json(metrics_json)))
-                
-                if cursor.rowcount > 0:
-                    period_snapshots += 1
+                try:
+                    cursor.execute(insert_query, (consumer_id, snapshot_timestamp, psycopg2.extras.Json(metrics_json)))
+                    if cursor.rowcount > 0:
+                        period_snapshots += 1
+                except psycopg2.IntegrityError:
+                    # Duplicate - skip silently (idempotency)
+                    pass
             
             # Create global snapshot for this period
             global_customer_query = """
@@ -280,12 +282,14 @@ def process_historical_period(**context):
             global_insert_query = """
                 INSERT INTO consumer_analytics (analytics_id, consumer_id, snapshot_timestamp, metrics_json)
                 VALUES (gen_random_uuid(), NULL, %s, %s::jsonb)
-                ON CONFLICT (consumer_id, snapshot_timestamp) DO NOTHING
             """
-            cursor.execute(global_insert_query, (snapshot_timestamp, psycopg2.extras.Json(global_metrics_json)))
-            
-            if cursor.rowcount > 0:
-                period_snapshots += 1
+            try:
+                cursor.execute(global_insert_query, (snapshot_timestamp, psycopg2.extras.Json(global_metrics_json)))
+                if cursor.rowcount > 0:
+                    period_snapshots += 1
+            except psycopg2.IntegrityError:
+                # Duplicate - skip silently (idempotency)
+                pass
             
             conn.commit()
             

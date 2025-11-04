@@ -446,11 +446,10 @@ def load_consumer_analytics(**context):
                 duplicate_count += 1
                 continue
             
-            # Insert snapshot
+            # Insert snapshot (duplicate check already performed above)
             insert_query = """
                 INSERT INTO consumer_analytics (analytics_id, consumer_id, snapshot_timestamp, metrics_json)
                 VALUES (gen_random_uuid(), %s, %s, %s::jsonb)
-                ON CONFLICT (consumer_id, snapshot_timestamp) DO NOTHING
             """
             
             cursor.execute(insert_query, (consumer_id, snapshot_timestamp, psycopg2.extras.Json(metrics_json)))
@@ -516,11 +515,10 @@ def load_consumer_analytics(**context):
             }
         }
         
-        # Insert global snapshot with consumer_id=NULL
+        # Insert global snapshot with consumer_id=NULL (no duplicate check needed - partial unique index handles it)
         global_insert_query = """
             INSERT INTO consumer_analytics (analytics_id, consumer_id, snapshot_timestamp, metrics_json)
             VALUES (gen_random_uuid(), NULL, %s, %s::jsonb)
-            ON CONFLICT (consumer_id, snapshot_timestamp) DO NOTHING
         """
         
         cursor.execute(global_insert_query, (snapshot_timestamp, psycopg2.extras.Json(global_metrics_json)))

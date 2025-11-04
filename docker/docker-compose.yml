@@ -168,6 +168,27 @@ services:
       - fintegrate-network
     restart: unless-stopped
 
+  # Event Consumer for consumer_swadia_bank (Swadia Bank integration)
+  event_consumer_swadia_bank:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile.event_consumer
+    container_name: fintegrate-event-consumer-swadia-bank
+    environment:
+      RABBITMQ_HOST: rabbitmq
+      RABBITMQ_PORT: 5672
+      RABBITMQ_USER: fintegrate_user
+      RABBITMQ_PASS: fintegrate_pass
+      CUSTOMER_SERVICE_URL: http://traefik:80
+      CONSUMER_NAME: consumer_swadia_bank
+    depends_on:
+      - rabbitmq
+      - customer_service_1
+      - customer_service_2
+    networks:
+      - fintegrate-network
+    restart: unless-stopped
+
   postgres:
     image: postgres:15-alpine
     container_name: fintegrate-postgres
