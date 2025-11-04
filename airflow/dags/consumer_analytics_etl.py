@@ -1,9 +1,12 @@
 """
 Consumer Analytics ETL DAG
 Aggregates customer and event data into consumer-level metrics snapshots.
+Generates per-consumer snapshots + global system-wide snapshot (consumer_id=NULL).
 
 Schedule: Daily at midnight (configurable via SCHEDULE_INTERVAL environment variable)
 Pattern: Extract → Transform → Load with incremental watermark tracking
+
+Email Alerts: Sends failure notifications to vytaske11@gmail.com
 """
 from datetime import datetime, timedelta
 from airflow import DAG
@@ -29,8 +32,30 @@ SCHEDULE_INTERVAL = os.getenv('ETL_SCHEDULE_INTERVAL', '@daily')
 
 
 def get_db_connection():
-    """Create PostgreSQL connection."""
-    return psycopg2.connect(**DB_CONFIG)
+    """
+    Create PostgreSQL connection with retry logic.
+    
+    Returns:
+        psycopg2.connection: Database connection
+        
+    Raises:
+        Exception: After 3 failed connection attempts
+    """
+    max_attempts = 3
+    retry_delay = 2
+    
+    for attempt in range(1, max_attempts + 1):
+        try:
+            conn = psycopg2.connect(**DB_CONFIG)
+            logger.info(f"Database connection established (attempt {attempt})")
+            return conn
+        except psycopg2.OperationalError as e:
+            if attempt == max_attempts:
+                logger.error(f"Database connection failed after {max_attempts} attempts: {str(e)}")
+                raise
+            logger.warning(f"Database connection attempt {attempt} failed, retrying in {retry_delay}s: {str(e)}")
+            import time
+            time.sleep(retry_delay)
 
 
 def get_watermark(cursor, job_name='consumer_analytics_daily'):
@@ -102,13 +127,19 @@ def extract_customer_counts(**context):
     
     Returns:
         dict: Customer count metrics per consumer_id
+        
+    Raises:
+        ValueError: If query returns invalid data
     """
     logger.info("=== Starting Task 1: Extract Customer Counts ===")
     
-    conn = get_db_connection()
-    cursor = conn.cursor()
+    conn = None
+    cursor = None
     
     try:
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        
         # Get watermark (customers created after this time)
         watermark = get_watermark(cursor)
         
@@ -129,11 +160,21 @@ def extract_customer_counts(**context):
         cursor.execute(query, (watermark,))
         results = cursor.fetchall()
         
+        # Data quality check: Validate result set structure
+        if results and len(results[0]) != 6:
+            raise ValueError(f"Invalid query result structure: expected 6 columns, got {len(results[0])}")
+        
         # Transform to dictionary keyed by consumer_id
         customer_metrics = {}
         new_customers_count = 0
         for row in results:
             consumer_id = str(row[0])
+            
+            # Data quality check: Validate consumer_id is valid UUID
+            if not consumer_id or consumer_id == 'None':
+                logger.warning(f"Skipping row with invalid consumer_id: {row}")
+                continue
+            
             customer_metrics[consumer_id] = {
                 'total_customers': row[1],
                 'active_customers': row[2],
@@ -154,12 +195,20 @@ def extract_customer_counts(**context):
         
         return customer_metrics
         
+    except psycopg2.DatabaseError as e:
+        logger.error(f"Database error extracting customer counts: {str(e)}")
+        raise
+    except ValueError as e:
+        logger.error(f"Data validation error: {str(e)}")
+        raise
     except Exception as e:
-        logger.error(f"Error extracting customer counts: {str(e)}")
+        logger.error(f"Unexpected error extracting customer counts: {str(e)}")
         raise
     finally:
-        cursor.close()
-        conn.close()
+        if cursor:
+            cursor.close()
+        if conn:
+            conn.close()
 
 
 def extract_event_counts(**context):
@@ -168,13 +217,19 @@ def extract_event_counts(**context):
     
     Returns:
         dict: Event count metrics per consumer_id
+        
+    Raises:
+        ValueError: If query returns invalid data
     """
     logger.info("=== Starting Task 2: Extract Event Counts ===")
     
-    conn = get_db_connection()
-    cursor = conn.cursor()
+    conn = None
+    cursor = None
     
     try:
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        
         # Get watermark (events created after this time)
         watermark = get_watermark(cursor)
         
@@ -195,6 +250,10 @@ def extract_event_counts(**context):
         cursor.execute(query, (watermark,))
         results = cursor.fetchall()
         
+        # Data quality check: Validate result set structure
+        if results and len(results[0]) != 5:
+            raise ValueError(f"Invalid query result structure: expected 5 columns, got {len(results[0])}")
+        
         # Transform to nested dictionary
         event_metrics = {}
         total_new_events = 0
@@ -202,6 +261,15 @@ def extract_event_counts(**context):
             consumer_id = str(row[0])
             event_type = row[1]
             event_count = row[2]
+            
+            # Data quality check: Validate consumer_id and event_type
+            if not consumer_id or consumer_id == 'None':
+                logger.warning(f"Skipping row with invalid consumer_id: {row}")
+                continue
+            if not event_type:
+                logger.warning(f"Skipping row with missing event_type for consumer {consumer_id}")
+                continue
+            
             total_new_events += event_count
             
             if consumer_id not in event_metrics:
@@ -232,12 +300,20 @@ def extract_event_counts(**context):
         
         return event_metrics
         
+    except psycopg2.DatabaseError as e:
+        logger.error(f"Database error extracting event counts: {str(e)}")
+        raise
+    except ValueError as e:
+        logger.error(f"Data validation error: {str(e)}")
+        raise
     except Exception as e:
-        logger.error(f"Error extracting event counts: {str(e)}")
+        logger.error(f"Unexpected error extracting event counts: {str(e)}")
         raise
     finally:
-        cursor.close()
-        conn.close()
+        if cursor:
+            cursor.close()
+        if conn:
+            conn.close()
 
 
 def load_consumer_analytics(**context):
@@ -246,6 +322,7 @@ def load_consumer_analytics(**context):
     
     Creates one snapshot per consumer with aggregated metrics.
     Updates watermark after successful processing.
+    Includes data quality checks and duplicate detection.
     """
     logger.info("=== Starting Task 3: Load Consumer Analytics ===")
     
@@ -256,13 +333,20 @@ def load_consumer_analytics(**context):
     new_customers_count = context['task_instance'].xcom_pull(task_ids='extract_customer_counts', key='new_customers_count') or 0
     new_events_count = context['task_instance'].xcom_pull(task_ids='extract_event_counts', key='new_events_count') or 0
     
+    # Data quality check: Verify XCom data retrieved successfully
+    if watermark_str is None:
+        raise ValueError("Failed to retrieve watermark from XCom - upstream task may have failed")
+    
     # If no new data, skip processing but still update watermark
     if not customer_metrics and not event_metrics:
         logger.info("No new data since last watermark - skipping snapshot creation")
         
-        conn = get_db_connection()
-        cursor = conn.cursor()
+        conn = None
+        cursor = None
         try:
+            conn = get_db_connection()
+            cursor = conn.cursor()
+            
             # Update watermark with current timestamp to mark successful run
             current_timestamp = datetime.utcnow()
             update_watermark(
@@ -282,18 +366,30 @@ def load_consumer_analytics(**context):
                 'watermark_updated': current_timestamp.isoformat()
             }
         finally:
-            cursor.close()
-            conn.close()
+            if cursor:
+                cursor.close()
+            if conn:
+                conn.close()
     
-    conn = get_db_connection()
-    cursor = conn.cursor()
+    conn = None
+    cursor = None
     
     try:
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        
         snapshot_timestamp = datetime.utcnow()
         inserted_count = 0
+        duplicate_count = 0
         
         # Get all unique consumer IDs
         all_consumer_ids = set(customer_metrics.keys() if customer_metrics else []) | set(event_metrics.keys() if event_metrics else [])
+        
+        # Data quality check: Verify at least one consumer to process
+        if len(all_consumer_ids) == 0:
+            raise ValueError("No consumer IDs found in metrics data despite non-empty customer/event metrics")
+        
+        logger.info(f"Processing {len(all_consumer_ids)} consumers for snapshot at {snapshot_timestamp}")
         
         for consumer_id in all_consumer_ids:
             # Merge customer and event metrics
@@ -337,6 +433,19 @@ def load_consumer_analytics(**context):
                 }
             }
             
+            # Data quality check: Check for existing snapshot (duplicate detection)
+            check_query = """
+                SELECT COUNT(*) FROM consumer_analytics
+                WHERE consumer_id = %s AND snapshot_timestamp = %s
+            """
+            cursor.execute(check_query, (consumer_id, snapshot_timestamp))
+            existing_count = cursor.fetchone()[0]
+            
+            if existing_count > 0:
+                logger.warning(f"Duplicate snapshot detected for consumer {consumer_id} at {snapshot_timestamp} - skipping insert")
+                duplicate_count += 1
+                continue
+            
             # Insert snapshot
             insert_query = """
                 INSERT INTO consumer_analytics (analytics_id, consumer_id, snapshot_timestamp, metrics_json)
@@ -345,9 +454,88 @@ def load_consumer_analytics(**context):
             """
             
             cursor.execute(insert_query, (consumer_id, snapshot_timestamp, psycopg2.extras.Json(metrics_json)))
-            inserted_count += cursor.rowcount
             
-            logger.info(f"Inserted snapshot for consumer {consumer_id}: {metrics_json}")
+            if cursor.rowcount > 0:
+                inserted_count += 1
+                logger.info(f"Inserted snapshot for consumer {consumer_id}: {metrics_json}")
+            else:
+                duplicate_count += 1
+                logger.warning(f"Insert conflict for consumer {consumer_id} - duplicate prevented by unique constraint")
+        
+        # Task 6 Enhancement: Create GLOBAL system-wide snapshot (consumer_id=NULL)
+        logger.info("=" * 80)
+        logger.info("TASK 6: GENERATING GLOBAL SYSTEM-WIDE SNAPSHOT")
+        
+        # Query all-time totals (not filtered by watermark - full system state)
+        global_query = """
+            SELECT 
+                COUNT(*) as total_customers_all,
+                COUNT(*) FILTER (WHERE status = 'ACTIVE') as active_customers_all,
+                COUNT(*) FILTER (WHERE status = 'INACTIVE') as inactive_customers_all
+            FROM customers
+        """
+        cursor.execute(global_query)
+        global_customer_stats = cursor.fetchone()
+        
+        global_events_query = """
+            SELECT 
+                COUNT(*) as total_events_all,
+                COUNT(DISTINCT event_type) as distinct_event_types,
+                event_type,
+                COUNT(*) as event_count
+            FROM customer_events
+            GROUP BY event_type
+        """
+        cursor.execute(global_events_query)
+        global_event_results = cursor.fetchall()
+        
+        # Build global metrics
+        global_events_by_type = {}
+        total_events_all = 0
+        for row in global_event_results:
+            event_type = row[2]
+            event_count = row[3]
+            global_events_by_type[event_type] = event_count
+            total_events_all += event_count
+        
+        global_metrics_json = {
+            'total_customers_all_consumers': global_customer_stats[0],
+            'active_customers_all_consumers': global_customer_stats[1],
+            'inactive_customers_all_consumers': global_customer_stats[2],
+            'total_events_all_consumers': total_events_all,
+            'events_by_type_all_consumers': global_events_by_type,
+            'system_wide_active_ratio': round(global_customer_stats[1] / global_customer_stats[0], 4) if global_customer_stats[0] > 0 else 0,
+            'consumers_in_system': len(all_consumer_ids),
+            'snapshot_source': 'airflow_etl',
+            'etl_job': 'consumer_analytics_daily',
+            'snapshot_type': 'GLOBAL',
+            'incremental_stats': {
+                'new_customers_in_window': new_customers_count,
+                'new_events_in_window': new_events_count,
+                'watermark_used': watermark_str
+            }
+        }
+        
+        # Insert global snapshot with consumer_id=NULL
+        global_insert_query = """
+            INSERT INTO consumer_analytics (analytics_id, consumer_id, snapshot_timestamp, metrics_json)
+            VALUES (gen_random_uuid(), NULL, %s, %s::jsonb)
+            ON CONFLICT (consumer_id, snapshot_timestamp) DO NOTHING
+        """
+        
+        cursor.execute(global_insert_query, (snapshot_timestamp, psycopg2.extras.Json(global_metrics_json)))
+        
+        global_inserted = cursor.rowcount > 0
+        if global_inserted:
+            inserted_count += 1
+            logger.info(f"Inserted GLOBAL snapshot: {global_metrics_json}")
+        else:
+            duplicate_count += 1
+            logger.warning("GLOBAL snapshot conflict - duplicate prevented by unique constraint")
+        
+        # Data quality check: Verify insertions occurred
+        if inserted_count == 0 and duplicate_count == 0:
+            raise ValueError(f"No snapshots inserted for {len(all_consumer_ids)} consumers - possible data integrity issue")
         
         # Update watermark after successful processing
         update_watermark(
@@ -359,6 +547,7 @@ def load_consumer_analytics(**context):
             metadata={
                 'consumers_processed': len(all_consumer_ids),
                 'snapshots_inserted': inserted_count,
+                'duplicates_skipped': duplicate_count,
                 'new_customers': new_customers_count,
                 'new_events': new_events_count
             }
@@ -366,12 +555,13 @@ def load_consumer_analytics(**context):
         
         conn.commit()
         
-        logger.info(f"Successfully loaded {inserted_count} consumer analytics snapshots")
+        logger.info(f"Successfully loaded {inserted_count} consumer analytics snapshots ({duplicate_count} duplicates skipped)")
         logger.info(f"Watermark updated to {snapshot_timestamp}")
         
         return {
             'status': 'success',
             'snapshots_inserted': inserted_count,
+            'duplicates_skipped': duplicate_count,
             'snapshot_timestamp': snapshot_timestamp.isoformat(),
             'consumers_processed': len(all_consumer_ids),
             'new_customers': new_customers_count,
@@ -379,28 +569,77 @@ def load_consumer_analytics(**context):
             'watermark_updated': snapshot_timestamp.isoformat()
         }
         
-    except Exception as e:
-        conn.rollback()
+    except psycopg2.IntegrityError as e:
+        if conn:
+            conn.rollback()
+        logger.error(f"Database integrity error: {str(e)}")
         
         # Update watermark with failed status
         try:
-            update_watermark(
-                cursor=cursor,
-                job_name='consumer_analytics_daily',
-                new_timestamp=datetime.utcnow(),
-                status='failed',
-                records_processed=0,
-                metadata={'error': str(e)}
-            )
-            conn.commit()
+            if cursor:
+                update_watermark(
+                    cursor=cursor,
+                    job_name='consumer_analytics_daily',
+                    new_timestamp=datetime.utcnow(),
+                    status='failed',
+                    records_processed=0,
+                    metadata={'error': str(e), 'error_type': 'IntegrityError'}
+                )
+            if conn:
+                conn.commit()
+        except Exception as watermark_error:
+            logger.error(f"Failed to update watermark after error: {watermark_error}")
+        
+        raise
+    except ValueError as e:
+        if conn:
+            conn.rollback()
+        logger.error(f"Data validation error: {str(e)}")
+        
+        # Update watermark with failed status
+        try:
+            if cursor:
+                update_watermark(
+                    cursor=cursor,
+                    job_name='consumer_analytics_daily',
+                    new_timestamp=datetime.utcnow(),
+                    status='failed',
+                    records_processed=0,
+                    metadata={'error': str(e), 'error_type': 'ValueError'}
+                )
+            if conn:
+                conn.commit()
+        except Exception as watermark_error:
+            logger.error(f"Failed to update watermark after error: {watermark_error}")
+        
+        raise
+    except Exception as e:
+        if conn:
+            conn.rollback()
+        
+        # Update watermark with failed status
+        try:
+            if cursor:
+                update_watermark(
+                    cursor=cursor,
+                    job_name='consumer_analytics_daily',
+                    new_timestamp=datetime.utcnow(),
+                    status='failed',
+                    records_processed=0,
+                    metadata={'error': str(e), 'error_type': type(e).__name__}
+                )
+            if conn:
+                conn.commit()
         except Exception as watermark_error:
             logger.error(f"Failed to update watermark after error: {watermark_error}")
         
         logger.error(f"Error loading consumer analytics: {str(e)}")
         raise
     finally:
-        cursor.close()
-        conn.close()
+        if cursor:
+            cursor.close()
+        if conn:
+            conn.close()
 
 
 # DAG default arguments
@@ -408,10 +647,13 @@ default_args = {
     'owner': 'fintegrate',
     'depends_on_past': False,
     'start_date': datetime(2025, 11, 3),
-    'email_on_failure': False,
+    'email_on_failure': True,
     'email_on_retry': False,
+    'email': ['vytaske11@gmail.com'],
     'retries': 2,
     'retry_delay': timedelta(minutes=5),
+    'retry_exponential_backoff': True,
+    'max_retry_delay': timedelta(minutes=30),
 }
 
 # Define DAG

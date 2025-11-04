@@ -229,6 +229,14 @@ services:
       AIRFLOW__CORE__FERNET_KEY: 'YlCImzjge_TeZc9jFMdkNvD8gSGQj9dXeGA34Gf3OdM='
       AIRFLOW__CORE__LOAD_EXAMPLES: 'false'
       AIRFLOW__WEBSERVER__SECRET_KEY: 'fintegrate_secret_key_dev'
+      # Email Configuration (Task 8: Monitoring & Logging)
+      AIRFLOW__SMTP__SMTP_HOST: smtp.gmail.com
+      AIRFLOW__SMTP__SMTP_PORT: 587
+      AIRFLOW__SMTP__SMTP_USER: certalertnotifications@gmail.com
+      AIRFLOW__SMTP__SMTP_PASSWORD: ktom tbcz dpih weda
+      AIRFLOW__SMTP__SMTP_MAIL_FROM: certalertnotifications@gmail.com
+      AIRFLOW__SMTP__SMTP_STARTTLS: 'true'
+      AIRFLOW__SMTP__SMTP_SSL: 'false'
     ports:
       - "8081:8080"  # Airflow UI (avoiding conflict with Traefik dashboard on 8080)
     volumes:
@@ -259,6 +267,14 @@ services:
       AIRFLOW__CORE__FERNET_KEY: 'YlCImzjge_TeZc9jFMdkNvD8gSGQj9dXeGA34Gf3OdM='
       AIRFLOW__CORE__LOAD_EXAMPLES: 'false'
       AIRFLOW__WEBSERVER__SECRET_KEY: 'fintegrate_secret_key_dev'
+      # Email Configuration (Task 8: Monitoring & Logging)
+      AIRFLOW__SMTP__SMTP_HOST: smtp.gmail.com
+      AIRFLOW__SMTP__SMTP_PORT: 587
+      AIRFLOW__SMTP__SMTP_USER: certalertnotifications@gmail.com
+      AIRFLOW__SMTP__SMTP_PASSWORD: ktom tbcz dpih weda
+      AIRFLOW__SMTP__SMTP_MAIL_FROM: certalertnotifications@gmail.com
+      AIRFLOW__SMTP__SMTP_STARTTLS: 'true'
+      AIRFLOW__SMTP__SMTP_SSL: 'false'
     volumes:
       - ../airflow/dags:/opt/airflow/dags
       - airflow_logs:/opt/airflow/logs
