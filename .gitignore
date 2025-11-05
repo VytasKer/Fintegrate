@@ -2,6 +2,7 @@
 project-context.txt
 database-context.txt
 copilot-instructions.txt
+prompts.txt
 
 # Python
 __pycache__/

@@ -31,6 +31,14 @@ services:
       - fintegrate-network
     labels:
       - "traefik.enable=true"
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 256M
+        reservations:
+          cpus: '0.25'
+          memory: 128M
 
   # Redis (Rate limiting state storage)
   redis:
@@ -40,6 +48,14 @@ services:
       - "6379:6379"
     networks:
       - fintegrate-network
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 256M
+        reservations:
+          cpus: '0.25'
+          memory: 128M
     command: redis-server --maxmemory 64mb --maxmemory-policy allkeys-lru
 
   # Customer Service Instance 1 (FastAPI)
@@ -69,6 +85,14 @@ services:
       - redis
     networks:
       - fintegrate-network
+    deploy:
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 512M
+        reservations:
+          cpus: '0.5'
+          memory: 256M
     labels:
       # Enable Traefik for this service
       - "traefik.enable=true"
@@ -111,6 +135,14 @@ services:
       - redis
     networks:
       - fintegrate-network
+    deploy:
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 512M
+        reservations:
+          cpus: '0.5'
+          memory: 256M
     labels:
       # Enable Traefik for this service
       - "traefik.enable=true"
@@ -146,6 +178,14 @@ services:
     networks:
       - fintegrate-network
     restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 256M
+        reservations:
+          cpus: '0.25'
+          memory: 128M
 
   # Event Consumer for consumer_test001 (testing multi-consumer isolation)
   event_consumer_test001:
@@ -167,6 +207,14 @@ services:
     networks:
       - fintegrate-network
     restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 256M
+        reservations:
+          cpus: '0.25'
+          memory: 128M
 
   # Event Consumer for consumer_swadia_bank (Swadia Bank integration)
   event_consumer_swadia_bank:
@@ -188,6 +236,14 @@ services:
     networks:
       - fintegrate-network
     restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 256M
+        reservations:
+          cpus: '0.25'
+          memory: 128M
 
   postgres:
     image: postgres:15-alpine
@@ -202,6 +258,14 @@ services:
       - postgres_data:/var/lib/postgresql/data
     networks:
       - fintegrate-network
+    deploy:
+      resources:
+        limits:
+          cpus: '2.0'
+          memory: 1024M
+        reservations:
+          cpus: '1.0'
+          memory: 512M
 
   rabbitmq:
     image: rabbitmq:3.12-management-alpine
@@ -216,6 +280,14 @@ services:
       - rabbitmq_data:/var/lib/rabbitmq
     networks:
       - fintegrate-network
+    deploy:
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 512M
+        reservations:
+          cpus: '0.5'
+          memory: 256M
 
   # Airflow Init (One-time setup)
   airflow-init:
@@ -277,6 +349,14 @@ services:
       interval: 30s
       timeout: 10s
       retries: 3
+    deploy:
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 1024M
+        reservations:
+          cpus: '0.5'
+          memory: 512M
 
   # Airflow Scheduler (DAG execution engine)
   airflow-scheduler:
@@ -308,6 +388,14 @@ services:
       - fintegrate-network
     command: scheduler
     restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 1024M
+        reservations:
+          cpus: '0.5'
+          memory: 512M
 
 volumes:
   postgres_data:
