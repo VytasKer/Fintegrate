@@ -1570,3 +1570,163 @@ def change_consumer_status_admin(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             content=error_resp
         )
+
+
+# ============================================
+# Analytics API Endpoints (Power BI Integration - Task 1)
+# ============================================
+
+@router.get("/analytics/snapshots")
+def get_analytics_snapshots(
+    start_date: str = None,
+    end_date: str = None,
+    snapshot_type: str = "all",
+    page: int = 1,
+    page_size: int = 100,
+    consumer = Depends(verify_api_key),
+    _ = Depends(rate_limit_middleware),
+    db: Session = Depends(get_db)
+):
+    """
+    Get analytics snapshots for authenticated consumer (Power BI data source).
+    
+    Query Parameters:
+        - start_date: ISO 8601 date string (YYYY-MM-DD), default: 30 days ago
+        - end_date: ISO 8601 date string (YYYY-MM-DD), default: today
+        - snapshot_type: "all" | "consumer" | "global", default: "all"
+        - page: Page number (1-indexed), default: 1
+        - page_size: Records per page (1-1000), default: 100
+    
+    Returns:
+        Paginated list of analytics snapshots (consumer's own + global)
+    
+    Security:
+        - Consumer sees only their own snapshots + global snapshots
+        - Cannot query other consumers' data
+    """
+    from datetime import date, timedelta
+    import math
+    
+    try:
+        # Parse and validate date parameters
+        if start_date:
+            try:
+                # Handle both date-only (YYYY-MM-DD) and full datetime strings
+                if 'T' in start_date:
+                    start_dt = datetime.fromisoformat(start_date)
+                else:
+                    # Date only - set to beginning of day
+                    start_dt = datetime.fromisoformat(start_date + "T00:00:00")
+            except ValueError:
+                error_resp = error_response(
+                    status.HTTP_400_BAD_REQUEST,
+                    f"Invalid start_date format. Expected YYYY-MM-DD or YYYY-MM-DDTHH:MM:SS, got: {start_date}"
+                )
+                return JSONResponse(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    content=error_resp
+                )
+        else:
+            # Default: 30 days ago at beginning of day
+            start_dt = datetime.combine(date.today() - timedelta(days=30), datetime.min.time())
+        
+        if end_date:
+            try:
+                # Handle both date-only (YYYY-MM-DD) and full datetime strings
+                if 'T' in end_date:
+                    end_dt = datetime.fromisoformat(end_date)
+                else:
+                    # Date only - set to end of day
+                    end_dt = datetime.fromisoformat(end_date + "T23:59:59.999999")
+            except ValueError:
+                error_resp = error_response(
+                    status.HTTP_400_BAD_REQUEST,
+                    f"Invalid end_date format. Expected YYYY-MM-DD or YYYY-MM-DDTHH:MM:SS, got: {end_date}"
+                )
+                return JSONResponse(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    content=error_resp
+                )
+        else:
+            # Default: today end of day
+            end_dt = datetime.combine(date.today(), datetime.max.time())
+        
+        # Validate date range
+        if start_dt > end_dt:
+            error_resp = error_response(
+                status.HTTP_400_BAD_REQUEST,
+                f"start_date ({start_date}) must be before or equal to end_date ({end_date})"
+            )
+            return JSONResponse(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                content=error_resp
+            )
+        
+        # Validate snapshot_type
+        if snapshot_type not in ["all", "consumer", "global"]:
+            error_resp = error_response(
+                status.HTTP_400_BAD_REQUEST,
+                f"Invalid snapshot_type. Expected 'all', 'consumer', or 'global', got: {snapshot_type}"
+            )
+            return JSONResponse(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                content=error_resp
+            )
+        
+        # Validate pagination parameters
+        if page < 1:
+            error_resp = error_response(
+                status.HTTP_400_BAD_REQUEST,
+                f"page must be >= 1, got: {page}"
+            )
+            return JSONResponse(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                content=error_resp
+            )
+        
+        if page_size < 1 or page_size > 1000:
+            error_resp = error_response(
+                status.HTTP_400_BAD_REQUEST,
+                f"page_size must be between 1 and 1000, got: {page_size}"
+            )
+            return JSONResponse(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                content=error_resp
+            )
+        
+        # Call CRUD function
+        snapshots, total_count = crud.get_analytics_snapshots(
+            db=db,
+            authenticated_consumer_id=consumer.consumer_id,
+            start_date=start_dt,
+            end_date=end_dt,
+            snapshot_type=snapshot_type,
+            page=page,
+            page_size=page_size
+        )
+        
+        # Calculate pagination metadata
+        total_pages = math.ceil(total_count / page_size) if total_count > 0 else 0
+        
+        # Build response
+        response_data = {
+            "snapshots": snapshots,
+            "pagination": {
+                "page": page,
+                "page_size": page_size,
+                "total_records": total_count,
+                "total_pages": total_pages
+            }
+        }
+        
+        return success_response(response_data, status.HTTP_200_OK)
+        
+    except Exception as e:
+        error_resp = error_response(
+            status.HTTP_500_INTERNAL_SERVER_ERROR,
+            f"Failed to retrieve analytics snapshots: {str(e)}"
+        )
+        return JSONResponse(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            content=error_resp
+        )

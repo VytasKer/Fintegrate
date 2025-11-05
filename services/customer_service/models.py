@@ -87,6 +87,17 @@ class AuditLog(Base):
 #     analytics_id, consumer_id, snapshot_timestamp, metrics_json
 
 
+class ConsumerAnalytics(Base):
+    """Consumer analytics snapshots (populated by Airflow ETL)."""
+    __tablename__ = "consumer_analytics"
+    
+    analytics_id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    consumer_id = Column(UUID(as_uuid=True), nullable=True)  # NULL for global snapshots
+    snapshot_timestamp = Column(TIMESTAMP, nullable=False)
+    metrics_json = Column(JSONB, nullable=False)
+    created_at = Column(TIMESTAMP, nullable=False, server_default=func.current_timestamp())
+
+
 class ConsumerEventReceipt(Base):
     """Consumer event receipts for idempotency and delivery tracking."""
     __tablename__ = "consumer_event_receipts"

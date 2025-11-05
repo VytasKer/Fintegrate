@@ -7,7 +7,7 @@ import secrets
 import hashlib
 from services.customer_service.models import (
     Customer, CustomerEvent, CustomerTag, CustomerArchive, 
-    AuditLog, Consumer, ConsumerApiKey
+    AuditLog, Consumer, ConsumerApiKey, ConsumerAnalytics
 )
 from services.customer_service.schemas import CustomerCreate
 
@@ -627,3 +627,83 @@ def change_consumer_status(db: Session, consumer_id: UUID, new_status: str):
     db.refresh(consumer)
     db.refresh(db_event)
     return consumer, db_event
+
+
+# Analytics API Functions (Power BI Integration - Task 1)
+
+def get_analytics_snapshots(
+    db: Session,
+    authenticated_consumer_id: UUID,
+    start_date: datetime,
+    end_date: datetime,
+    snapshot_type: str,
+    page: int,
+    page_size: int
+) -> tuple[List[Dict[str, Any]], int]:
+    """
+    Retrieve analytics snapshots with consumer isolation and pagination.
+    
+    Args:
+        db: Database session
+        authenticated_consumer_id: Consumer UUID from API key (for security filtering)
+        start_date: Start of date range (inclusive)
+        end_date: End of date range (inclusive)
+        snapshot_type: Filter by type - "all", "consumer", or "global"
+        page: Page number (1-indexed)
+        page_size: Number of records per page
+    
+    Returns:
+        Tuple of (snapshots_list, total_count)
+    
+    Security:
+        - Consumer sees only their own snapshots + global snapshots
+        - Cannot query other consumers' data
+    """
+    # Base query with security filter
+    base_query = db.query(
+        ConsumerAnalytics.analytics_id,
+        ConsumerAnalytics.consumer_id,
+        Consumer.name.label('consumer_name'),
+        ConsumerAnalytics.snapshot_timestamp,
+        ConsumerAnalytics.metrics_json
+    ).outerjoin(
+        Consumer, ConsumerAnalytics.consumer_id == Consumer.consumer_id
+    ).filter(
+        # Security: Only own data + global
+        (ConsumerAnalytics.consumer_id == authenticated_consumer_id) | 
+        (ConsumerAnalytics.consumer_id == None)
+    ).filter(
+        # Date range filter
+        ConsumerAnalytics.snapshot_timestamp >= start_date,
+        ConsumerAnalytics.snapshot_timestamp <= end_date
+    )
+    
+    # Apply snapshot_type filter
+    if snapshot_type == "consumer":
+        base_query = base_query.filter(ConsumerAnalytics.consumer_id != None)
+    elif snapshot_type == "global":
+        base_query = base_query.filter(ConsumerAnalytics.consumer_id == None)
+    # "all" - no additional filter
+    
+    # Count total records (before pagination)
+    total_count = base_query.count()
+    
+    # Apply pagination and ordering
+    offset = (page - 1) * page_size
+    results = base_query.order_by(
+        desc(ConsumerAnalytics.snapshot_timestamp)
+    ).limit(page_size).offset(offset).all()
+    
+    # Transform to dict format
+    snapshots = []
+    for row in results:
+        snapshots.append({
+            "analytics_id": row.analytics_id,
+            "consumer_id": row.consumer_id,
+            "consumer_name": row.consumer_name,
+            "snapshot_timestamp": row.snapshot_timestamp,
+            "snapshot_type": "GLOBAL" if row.consumer_id is None else "CONSUMER",
+            "metrics": row.metrics_json
+        })
+    
+    return snapshots, total_count

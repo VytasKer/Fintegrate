@@ -300,3 +300,38 @@ class ConsumerChangeStatusStandardResponse(BaseModel):
     """Standard response for POST /admin/consumer/{consumer_id}/change-status"""
     data: Dict[str, Any]
     detail: Detail
+
+
+# Analytics API Schemas (Power BI Integration - Task 1)
+
+class AnalyticsSnapshot(BaseModel):
+    """Schema for individual analytics snapshot"""
+    analytics_id: UUID
+    consumer_id: Optional[UUID] = Field(None, description="Consumer UUID for per-consumer snapshots, null for global snapshots")
+    consumer_name: Optional[str] = Field(None, description="Consumer name, null for global snapshots")
+    snapshot_timestamp: datetime
+    snapshot_type: str = Field(..., description="CONSUMER or GLOBAL")
+    metrics: Dict[str, Any] = Field(..., description="Metrics JSON (structure varies by snapshot_type)")
+    
+    class Config:
+        from_attributes = True
+
+
+class PaginationMetadata(BaseModel):
+    """Pagination metadata for analytics responses"""
+    page: int = Field(..., ge=1, description="Current page number (1-indexed)")
+    page_size: int = Field(..., ge=1, le=1000, description="Number of records per page")
+    total_records: int = Field(..., ge=0, description="Total number of records matching filter")
+    total_pages: int = Field(..., ge=0, description="Total number of pages")
+
+
+class AnalyticsSnapshotsResponseData(BaseModel):
+    """Data section for GET /analytics/snapshots"""
+    snapshots: List[AnalyticsSnapshot]
+    pagination: PaginationMetadata
+
+
+class AnalyticsSnapshotsStandardResponse(BaseModel):
+    """Standard response for GET /analytics/snapshots"""
+    data: AnalyticsSnapshotsResponseData
+    detail: Detail
