@@ -3,6 +3,7 @@ project-context.txt
 database-context.txt
 copilot-instructions.txt
 prompts.txt
+kubernetes/kubectl-commands.md
 
 # Python
 __pycache__/
