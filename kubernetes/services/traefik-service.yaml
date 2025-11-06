@@ -5,17 +5,17 @@ metadata:
   labels:
     app: traefik
 spec:
-  type: NodePort  # Expose externally via Minikube IP
+  type: NodePort  # Expose externally (access via kubectl port-forward)
   selector:
     app: traefik
   ports:
-  - port: 80
-    targetPort: 80
-    nodePort: 30080  # Static port on Minikube node
+  - port: 8000
+    targetPort: 8000
+    nodePort: 30001  # Maps to localhost:8001 via port-forward
     protocol: TCP
     name: web
   - port: 8080
     targetPort: 8080
-    nodePort: 30081  # Traefik dashboard
+    nodePort: 30002  # Traefik dashboard (localhost:8002)
     protocol: TCP
     name: dashboard

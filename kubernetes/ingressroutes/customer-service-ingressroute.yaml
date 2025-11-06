@@ -1,0 +1,48 @@
+# Customer Service IngressRoute
+# Traefik routing rules: /customer, /consumer, /events, /analytics → customer-service:8000
+# Applies IP-based rate limiting middleware
+
+apiVersion: traefik.containo.us/v1alpha1
+kind: IngressRoute
+metadata:
+  name: customer-service
+  namespace: default
+spec:
+  entryPoints:
+    - web
+  routes:
+    - match: PathPrefix(`/customer`)
+      kind: Rule
+      middlewares:
+        - name: ratelimit-ip
+      services:
+        - name: customer-service
+          port: 8000
+    - match: PathPrefix(`/consumer`)
+      kind: Rule
+      middlewares:
+        - name: ratelimit-ip
+      services:
+        - name: customer-service
+          port: 8000
+    - match: PathPrefix(`/events`)
+      kind: Rule
+      middlewares:
+        - name: ratelimit-ip
+      services:
+        - name: customer-service
+          port: 8000
+    - match: PathPrefix(`/analytics`)
+      kind: Rule
+      middlewares:
+        - name: ratelimit-ip
+      services:
+        - name: customer-service
+          port: 8000
+    - match: PathPrefix(`/admin`)
+      kind: Rule
+      middlewares:
+        - name: ratelimit-ip
+      services:
+        - name: customer-service
+          port: 8000

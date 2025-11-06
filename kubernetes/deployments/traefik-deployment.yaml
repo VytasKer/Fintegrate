@@ -16,24 +16,49 @@ spec:
         app: traefik
         tier: gateway
     spec:
+      serviceAccountName: traefik
       containers:
       - name: traefik
         image: traefik:v2.10
         args:
-        - --api.dashboard=true
-        - --api.insecure=true
-        - --entrypoints.web.address=:80
-        - --providers.kubernetesingress=true
-        - --log.level=INFO
+          # Enable Kubernetes providers (IngressRoutes + standard Ingress)
+          - --providers.kubernetesingress=true
+          - --providers.kubernetescrd=true
+          # Define entrypoints
+          - --entrypoints.web.address=:8000
+          - --entrypoints.traefik.address=:8080
+          # Enable API and dashboard
+          - --api.dashboard=true
+          - --api.insecure=true
+          # Enable ping endpoint for health probes
+          - --ping=true
+          - --ping.entryPoint=traefik
+          # Logging
+          - --log.level=INFO
+          - --accesslog=true
         ports:
-        - containerPort: 80
-          name: web
-        - containerPort: 8080
-          name: dashboard
+        - name: web
+          containerPort: 8000
+          protocol: TCP
+        - name: traefik
+          containerPort: 8080
+          protocol: TCP
         resources:
           requests:
-            cpu: 100m
+            cpu: 250m
             memory: 128Mi
           limits:
             cpu: 500m
             memory: 256Mi
+        livenessProbe:
+          httpGet:
+            path: /ping
+            port: 8080
+          initialDelaySeconds: 10
+          periodSeconds: 10
+        readinessProbe:
+          httpGet:
+            path: /ping
+            port: 8080
+          initialDelaySeconds: 5
+          periodSeconds: 5

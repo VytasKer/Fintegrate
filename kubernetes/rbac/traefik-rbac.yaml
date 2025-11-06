@@ -1,0 +1,76 @@
+# Traefik RBAC Configuration
+# Grants Traefik permissions to watch Kubernetes resources (Services, Endpoints, Ingresses, IngressRoutes)
+
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: traefik
+  namespace: default
+
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: traefik
+rules:
+  # Watch Services and Endpoints for dynamic backend discovery
+  - apiGroups:
+      - ""
+    resources:
+      - services
+      - endpoints
+      - secrets
+    verbs:
+      - get
+      - list
+      - watch
+  # Watch standard Kubernetes Ingress resources
+  - apiGroups:
+      - networking.k8s.io
+    resources:
+      - ingresses
+      - ingressclasses
+    verbs:
+      - get
+      - list
+      - watch
+  # Watch Ingress status (for updating LoadBalancer IPs)
+  - apiGroups:
+      - networking.k8s.io
+    resources:
+      - ingresses/status
+    verbs:
+      - update
+  # Watch Traefik CRDs (IngressRoute, Middleware, etc.)
+  - apiGroups:
+      - traefik.containo.us
+      - traefik.io
+    resources:
+      - ingressroutes
+      - ingressroutetcps
+      - ingressrouteudps
+      - middlewares
+      - middlewaretcps
+      - tlsoptions
+      - tlsstores
+      - traefikservices
+      - serverstransports
+    verbs:
+      - get
+      - list
+      - watch
+
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: traefik
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: traefik
+subjects:
+  - kind: ServiceAccount
+    name: traefik
+    namespace: default

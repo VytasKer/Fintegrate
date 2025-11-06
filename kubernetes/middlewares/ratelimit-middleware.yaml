@@ -1,0 +1,13 @@
+# Rate Limiting Middleware
+# IP-based rate limiting: 100 req/min, 20 burst
+
+apiVersion: traefik.containo.us/v1alpha1
+kind: Middleware
+metadata:
+  name: ratelimit-ip
+  namespace: default
+spec:
+  rateLimit:
+    average: 100  # requests per period
+    period: 1m
+    burst: 20
