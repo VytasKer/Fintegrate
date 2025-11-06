@@ -1,0 +1,39 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: traefik
+  labels:
+    app: traefik
+    tier: gateway
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: traefik
+  template:
+    metadata:
+      labels:
+        app: traefik
+        tier: gateway
+    spec:
+      containers:
+      - name: traefik
+        image: traefik:v2.10
+        args:
+        - --api.dashboard=true
+        - --api.insecure=true
+        - --entrypoints.web.address=:80
+        - --providers.kubernetesingress=true
+        - --log.level=INFO
+        ports:
+        - containerPort: 80
+          name: web
+        - containerPort: 8080
+          name: dashboard
+        resources:
+          requests:
+            cpu: 100m
+            memory: 128Mi
+          limits:
+            cpu: 500m
+            memory: 256Mi

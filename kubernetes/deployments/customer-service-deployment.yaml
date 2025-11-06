@@ -1,0 +1,68 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: customer-service
+  labels:
+    app: customer-service
+    tier: backend
+spec:
+  replicas: 2  # Two instances like docker-compose
+  selector:
+    matchLabels:
+      app: customer-service
+  template:
+    metadata:
+      labels:
+        app: customer-service
+        tier: backend
+    spec:
+      containers:
+      - name: customer-service
+        image: fintegrate-customer-service:v1.0
+        imagePullPolicy: Never  # Use local image from Minikube
+        ports:
+        - containerPort: 8000
+          name: http
+        env:
+        # Placeholders - will be replaced with ConfigMap/Secrets in Task 3
+        - name: DATABASE_URL
+          value: "postgresql://fintegrate_user:fintegrate_pass@postgres:5432/fintegrate_db"
+        - name: RABBITMQ_HOST
+          value: "rabbitmq"
+        - name: RABBITMQ_PORT
+          value: "5672"
+        - name: RABBITMQ_USER
+          value: "fintegrate_user"
+        - name: RABBITMQ_PASS
+          value: "fintegrate_pass"
+        - name: REDIS_HOST
+          value: "redis"
+        - name: REDIS_PORT
+          value: "6379"
+        - name: RATE_LIMIT_IP_PER_MINUTE
+          value: "500"
+        - name: RATE_LIMIT_IP_BURST
+          value: "500"
+        - name: RATE_LIMIT_API_KEY_PER_MINUTE
+          value: "50"
+        - name: RATE_LIMIT_API_KEY_BURST
+          value: "500"
+        resources:
+          requests:
+            cpu: 250m      # 0.25 CPU
+            memory: 256Mi
+          limits:
+            cpu: 1000m     # 1.0 CPU
+            memory: 512Mi
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: 8000
+          initialDelaySeconds: 30
+          periodSeconds: 10
+        readinessProbe:
+          httpGet:
+            path: /health
+            port: 8000
+          initialDelaySeconds: 10
+          periodSeconds: 5

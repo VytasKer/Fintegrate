@@ -1,0 +1,21 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: traefik
+  labels:
+    app: traefik
+spec:
+  type: NodePort  # Expose externally via Minikube IP
+  selector:
+    app: traefik
+  ports:
+  - port: 80
+    targetPort: 80
+    nodePort: 30080  # Static port on Minikube node
+    protocol: TCP
+    name: web
+  - port: 8080
+    targetPort: 8080
+    nodePort: 30081  # Traefik dashboard
+    protocol: TCP
+    name: dashboard
