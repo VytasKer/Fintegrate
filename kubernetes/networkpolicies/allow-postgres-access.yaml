@@ -1,0 +1,35 @@
+# NetworkPolicy: Allow customer-service in dev to access postgres in default namespace
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-customer-to-postgres
+  namespace: default
+spec:
+  podSelector:
+    matchLabels:
+      app: postgres  # Target postgres pods
+  policyTypes:
+  - Ingress
+  ingress:
+  - from:
+    - namespaceSelector:
+        matchLabels:
+          environment: dev
+      podSelector:
+        matchLabels:
+          app: customer-service
+    - namespaceSelector:
+        matchLabels:
+          environment: test
+      podSelector:
+        matchLabels:
+          app: customer-service
+    - namespaceSelector:
+        matchLabels:
+          environment: prod
+      podSelector:
+        matchLabels:
+          app: customer-service
+    ports:
+    - protocol: TCP
+      port: 5432

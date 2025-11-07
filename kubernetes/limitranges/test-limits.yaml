@@ -1,0 +1,22 @@
+# LimitRange for test namespace
+# Sets default resource constraints for pods without explicit limits
+apiVersion: v1
+kind: LimitRange
+metadata:
+  name: test-limits
+  namespace: test
+spec:
+  limits:
+  - max:
+      cpu: "2"          # Max CPU per pod
+      memory: "2Gi"     # Max memory per pod
+    min:
+      cpu: "50m"        # Min CPU per pod
+      memory: "64Mi"    # Min memory per pod
+    default:
+      cpu: "500m"       # Default CPU limit if not specified
+      memory: "512Mi"   # Default memory limit
+    defaultRequest:
+      cpu: "250m"       # Default CPU request if not specified
+      memory: "256Mi"   # Default memory request
+    type: Container

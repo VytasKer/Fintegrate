@@ -1,0 +1,22 @@
+# LimitRange for prod namespace
+# Sets default resource constraints for pods without explicit limits
+apiVersion: v1
+kind: LimitRange
+metadata:
+  name: prod-limits
+  namespace: prod
+spec:
+  limits:
+  - max:
+      cpu: "4"          # Max CPU per pod
+      memory: "4Gi"     # Max memory per pod
+    min:
+      cpu: "100m"       # Min CPU per pod
+      memory: "128Mi"   # Min memory per pod
+    default:
+      cpu: "1"          # Default CPU limit if not specified
+      memory: "1Gi"     # Default memory limit
+    defaultRequest:
+      cpu: "500m"       # Default CPU request if not specified
+      memory: "512Mi"   # Default memory request
+    type: Container

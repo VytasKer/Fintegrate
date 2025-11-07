@@ -1,0 +1,8 @@
+# Test environment namespace
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: test
+  labels:
+    environment: test
+    team: qa

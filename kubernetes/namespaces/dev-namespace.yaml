@@ -1,0 +1,8 @@
+# Dev environment namespace
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: dev
+  labels:
+    environment: dev
+    team: engineering

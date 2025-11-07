@@ -1,0 +1,52 @@
+# NetworkPolicy: Deny traffic between dev/test/prod namespaces
+# Prevents customer-service in dev from accessing customer-service in test/prod
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: deny-cross-namespace
+  namespace: dev
+spec:
+  podSelector:
+    matchLabels:
+      app: customer-service
+  policyTypes:
+  - Ingress
+  ingress:
+  - from:
+    - namespaceSelector:
+        matchLabels:
+          environment: dev  # Only allow traffic from same namespace
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: deny-cross-namespace
+  namespace: test
+spec:
+  podSelector:
+    matchLabels:
+      app: customer-service
+  policyTypes:
+  - Ingress
+  ingress:
+  - from:
+    - namespaceSelector:
+        matchLabels:
+          environment: test
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: deny-cross-namespace
+  namespace: prod
+spec:
+  podSelector:
+    matchLabels:
+      app: customer-service
+  policyTypes:
+  - Ingress
+  ingress:
+  - from:
+    - namespaceSelector:
+        matchLabels:
+          environment: prod

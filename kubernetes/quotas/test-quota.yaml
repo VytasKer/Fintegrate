@@ -1,0 +1,16 @@
+# ResourceQuota for test namespace
+# Limits: 4 CPU cores, 8Gi memory, 15 pods
+apiVersion: v1
+kind: ResourceQuota
+metadata:
+  name: test-quota
+  namespace: test
+spec:
+  hard:
+    requests.cpu: "4"            # Total CPU requests across all pods
+    requests.memory: "8Gi"       # Total memory requests
+    limits.cpu: "8"              # Total CPU limits
+    limits.memory: "16Gi"        # Total memory limits
+    pods: "15"                   # Max 15 pods in namespace
+    services: "10"               # Max 10 services
+    persistentvolumeclaims: "5"  # Max 5 PVCs

@@ -1,0 +1,16 @@
+# ResourceQuota for dev namespace
+# Limits: 2 CPU cores, 4Gi memory, 10 pods
+apiVersion: v1
+kind: ResourceQuota
+metadata:
+  name: dev-quota
+  namespace: dev
+spec:
+  hard:
+    requests.cpu: "2"           # Total CPU requests across all pods
+    requests.memory: "4Gi"       # Total memory requests
+    limits.cpu: "4"              # Total CPU limits
+    limits.memory: "8Gi"         # Total memory limits
+    pods: "10"                   # Max 10 pods in namespace
+    services: "5"                # Max 5 services
+    persistentvolumeclaims: "3"  # Max 3 PVCs

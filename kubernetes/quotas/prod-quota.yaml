@@ -1,0 +1,16 @@
+# ResourceQuota for prod namespace
+# Limits: 8 CPU cores, 16Gi memory, 20 pods
+apiVersion: v1
+kind: ResourceQuota
+metadata:
+  name: prod-quota
+  namespace: prod
+spec:
+  hard:
+    requests.cpu: "8"            # Total CPU requests across all pods
+    requests.memory: "16Gi"      # Total memory requests
+    limits.cpu: "16"             # Total CPU limits
+    limits.memory: "32Gi"        # Total memory limits
+    pods: "20"                   # Max 20 pods in namespace
+    services: "15"               # Max 15 services
+    persistentvolumeclaims: "10" # Max 10 PVCs

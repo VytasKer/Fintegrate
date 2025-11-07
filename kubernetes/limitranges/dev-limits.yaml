@@ -1,0 +1,22 @@
+# LimitRange for dev namespace
+# Sets default resource constraints for pods without explicit limits
+apiVersion: v1
+kind: LimitRange
+metadata:
+  name: dev-limits
+  namespace: dev
+spec:
+  limits:
+  - max:
+      cpu: "1"          # Max CPU per pod
+      memory: "1Gi"     # Max memory per pod
+    min:
+      cpu: "50m"        # Min CPU per pod
+      memory: "64Mi"    # Min memory per pod
+    default:
+      cpu: "200m"       # Default CPU limit if not specified
+      memory: "256Mi"   # Default memory limit
+    defaultRequest:
+      cpu: "100m"       # Default CPU request if not specified
+      memory: "128Mi"   # Default memory request
+    type: Container
