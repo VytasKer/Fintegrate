@@ -24,29 +24,65 @@ spec:
         - containerPort: 8000
           name: http
         env:
-        # Placeholders - will be replaced with ConfigMap/Secrets in Task 3
+        # Database credentials (Secret)
         - name: DATABASE_URL
-          value: "postgresql://fintegrate_user:fintegrate_pass@postgres:5432/fintegrate_db"
+          valueFrom:
+            secretKeyRef:
+              name: postgres-secret
+              key: DATABASE_URL
+        # RabbitMQ configuration (Secret + ConfigMap)
         - name: RABBITMQ_HOST
-          value: "rabbitmq"
+          valueFrom:
+            configMapKeyRef:
+              name: app-config
+              key: RABBITMQ_HOST
         - name: RABBITMQ_PORT
-          value: "5672"
+          valueFrom:
+            configMapKeyRef:
+              name: app-config
+              key: RABBITMQ_PORT
         - name: RABBITMQ_USER
-          value: "fintegrate_user"
+          valueFrom:
+            secretKeyRef:
+              name: rabbitmq-secret
+              key: RABBITMQ_USER
         - name: RABBITMQ_PASS
-          value: "fintegrate_pass"
+          valueFrom:
+            secretKeyRef:
+              name: rabbitmq-secret
+              key: RABBITMQ_PASS
+        # Redis configuration (ConfigMap)
         - name: REDIS_HOST
-          value: "redis"
+          valueFrom:
+            configMapKeyRef:
+              name: app-config
+              key: REDIS_HOST
         - name: REDIS_PORT
-          value: "6379"
+          valueFrom:
+            configMapKeyRef:
+              name: app-config
+              key: REDIS_PORT
+        # Rate limiting configuration (ConfigMap)
         - name: RATE_LIMIT_IP_PER_MINUTE
-          value: "500"
+          valueFrom:
+            configMapKeyRef:
+              name: app-config
+              key: RATE_LIMIT_IP_PER_MINUTE
         - name: RATE_LIMIT_IP_BURST
-          value: "500"
+          valueFrom:
+            configMapKeyRef:
+              name: app-config
+              key: RATE_LIMIT_IP_BURST
         - name: RATE_LIMIT_API_KEY_PER_MINUTE
-          value: "50"
+          valueFrom:
+            configMapKeyRef:
+              name: app-config
+              key: RATE_LIMIT_API_KEY_PER_MINUTE
         - name: RATE_LIMIT_API_KEY_BURST
-          value: "500"
+          valueFrom:
+            configMapKeyRef:
+              name: app-config
+              key: RATE_LIMIT_API_KEY_BURST
         resources:
           requests:
             cpu: 250m      # 0.25 CPU

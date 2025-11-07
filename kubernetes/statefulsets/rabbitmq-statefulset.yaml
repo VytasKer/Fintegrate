@@ -66,9 +66,15 @@ spec:
           name: management
         env:
         - name: RABBITMQ_DEFAULT_USER
-          value: fintegrate_user
+          valueFrom:
+            secretKeyRef:
+              name: rabbitmq-secret
+              key: RABBITMQ_USER
         - name: RABBITMQ_DEFAULT_PASS
-          value: fintegrate_pass
+          valueFrom:
+            secretKeyRef:
+              name: rabbitmq-secret
+              key: RABBITMQ_PASS
         volumeMounts:
         - name: rabbitmq-storage
           mountPath: /var/lib/rabbitmq

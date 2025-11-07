@@ -23,15 +23,30 @@ spec:
         imagePullPolicy: Never
         env:
         - name: RABBITMQ_HOST
-          value: "rabbitmq"
+          valueFrom:
+            configMapKeyRef:
+              name: app-config
+              key: RABBITMQ_HOST
         - name: RABBITMQ_PORT
-          value: "5672"
+          valueFrom:
+            configMapKeyRef:
+              name: app-config
+              key: RABBITMQ_PORT
         - name: RABBITMQ_USER
-          value: "fintegrate_user"
+          valueFrom:
+            secretKeyRef:
+              name: rabbitmq-secret
+              key: RABBITMQ_USER
         - name: RABBITMQ_PASS
-          value: "fintegrate_pass"
+          valueFrom:
+            secretKeyRef:
+              name: rabbitmq-secret
+              key: RABBITMQ_PASS
         - name: CUSTOMER_SERVICE_URL
-          value: "http://customer-service:8000"
+          valueFrom:
+            configMapKeyRef:
+              name: app-config
+              key: CUSTOMER_SERVICE_URL
         - name: CONSUMER_NAME
           value: "system_default"
         resources:
@@ -67,15 +82,30 @@ spec:
         imagePullPolicy: Never
         env:
         - name: RABBITMQ_HOST
-          value: "rabbitmq"
+          valueFrom:
+            configMapKeyRef:
+              name: app-config
+              key: RABBITMQ_HOST
         - name: RABBITMQ_PORT
-          value: "5672"
+          valueFrom:
+            configMapKeyRef:
+              name: app-config
+              key: RABBITMQ_PORT
         - name: RABBITMQ_USER
-          value: "fintegrate_user"
+          valueFrom:
+            secretKeyRef:
+              name: rabbitmq-secret
+              key: RABBITMQ_USER
         - name: RABBITMQ_PASS
-          value: "fintegrate_pass"
+          valueFrom:
+            secretKeyRef:
+              name: rabbitmq-secret
+              key: RABBITMQ_PASS
         - name: CUSTOMER_SERVICE_URL
-          value: "http://customer-service:8000"
+          valueFrom:
+            configMapKeyRef:
+              name: app-config
+              key: CUSTOMER_SERVICE_URL
         - name: CONSUMER_NAME
           value: "consumer_test001"
         resources:
@@ -111,15 +141,30 @@ spec:
         imagePullPolicy: Never
         env:
         - name: RABBITMQ_HOST
-          value: "rabbitmq"
+          valueFrom:
+            configMapKeyRef:
+              name: app-config
+              key: RABBITMQ_HOST
         - name: RABBITMQ_PORT
-          value: "5672"
+          valueFrom:
+            configMapKeyRef:
+              name: app-config
+              key: RABBITMQ_PORT
         - name: RABBITMQ_USER
-          value: "fintegrate_user"
+          valueFrom:
+            secretKeyRef:
+              name: rabbitmq-secret
+              key: RABBITMQ_USER
         - name: RABBITMQ_PASS
-          value: "fintegrate_pass"
+          valueFrom:
+            secretKeyRef:
+              name: rabbitmq-secret
+              key: RABBITMQ_PASS
         - name: CUSTOMER_SERVICE_URL
-          value: "http://customer-service:8000"
+          valueFrom:
+            configMapKeyRef:
+              name: app-config
+              key: CUSTOMER_SERVICE_URL
         - name: CONSUMER_NAME
           value: "consumer_swadia_bank"
         resources:

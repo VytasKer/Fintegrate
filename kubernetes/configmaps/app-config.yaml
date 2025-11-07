@@ -1,0 +1,23 @@
+# Application Configuration
+# Non-sensitive settings for customer-service and event-consumers
+
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: app-config
+  namespace: default
+data:
+  # Service hostnames (Kubernetes DNS)
+  REDIS_HOST: "redis"
+  REDIS_PORT: "6379"
+  RABBITMQ_HOST: "rabbitmq"
+  RABBITMQ_PORT: "5672"
+  
+  # Rate limiting configuration (updated for testing config change)
+  RATE_LIMIT_IP_PER_MINUTE: "100"
+  RATE_LIMIT_IP_BURST: "200"
+  RATE_LIMIT_API_KEY_PER_MINUTE: "25"
+  RATE_LIMIT_API_KEY_BURST: "100"
+  
+  # Customer service URL (for event consumers)
+  CUSTOMER_SERVICE_URL: "http://traefik:8000"
