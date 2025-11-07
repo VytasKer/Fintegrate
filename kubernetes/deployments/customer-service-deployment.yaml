@@ -6,7 +6,12 @@ metadata:
     app: customer-service
     tier: backend
 spec:
-  replicas: 2  # Two instances like docker-compose
+  replicas: 2  # Managed by HPA (min 2, max 5)
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1        # Max 1 extra pod during rollout
+      maxUnavailable: 0  # Zero-downtime (no pod termination until new ready)
   selector:
     matchLabels:
       app: customer-service
