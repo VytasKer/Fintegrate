@@ -5,6 +5,7 @@ copilot-instructions.txt
 prompts.txt
 kubernetes/kubectl-commands.md
 kubernetes/KUBERNETES_PRACTICE_SOLUTIONS.md
+kubernetes/secrets/*.yaml
 
 # Python
 __pycache__/
