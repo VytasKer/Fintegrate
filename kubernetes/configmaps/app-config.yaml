@@ -20,4 +20,6 @@ data:
   RATE_LIMIT_API_KEY_BURST: "100"
   
   # Customer service URL (for event consumers)
-  CUSTOMER_SERVICE_URL: "http://traefik:8000"
+  # Minikube: Direct service access (no Traefik routing)
+  # Docker Compose uses http://traefik:80 (set in docker-compose.yml)
+  CUSTOMER_SERVICE_URL: "http://customer-service:8000"

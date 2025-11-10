@@ -16,5 +16,8 @@ COPY services/shared/ /app/shared/
 # Set Python path to include /app
 ENV PYTHONPATH=/app
 
-# Run the consumer
-CMD ["python", "event_consumer/simple_consumer.py"]
+# Disable Python output buffering for real-time logs
+ENV PYTHONUNBUFFERED=1
+
+# Run the consumer with unbuffered output
+CMD ["python", "-u", "event_consumer/simple_consumer.py"]
