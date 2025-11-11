@@ -283,6 +283,40 @@ function Restart-Services {
 function Stop-ClusterSafe {
     Write-Host "`n[Safe Stop...]" -ForegroundColor Yellow
     
+    # Create backups directory if not exists
+    $backupPath = Join-Path $PSScriptRoot "backups"
+    if (-not (Test-Path $backupPath)) {
+        New-Item -ItemType Directory -Path $backupPath | Out-Null
+        Write-Host "Created backups directory: $backupPath" -ForegroundColor Gray
+    }
+    
+    # Backup database before stopping
+    Write-Host "Creating database backup..." -ForegroundColor Yellow
+    $backupFile = Join-Path $backupPath "backup_$(Get-Date -Format 'yyyyMMdd_HHmm').sql"
+    
+    $status = minikube status --format='{{.Host}}' 2>&1
+    if ($status -match "Running") {
+        kubectl exec -n default postgres-0 -- pg_dump -U fintegrate_user fintegrate_db > $backupFile 2>&1
+        
+        if ($LASTEXITCODE -eq 0 -and (Test-Path $backupFile) -and (Get-Item $backupFile).Length -gt 0) {
+            Write-Host "  Backup saved: $backupFile" -ForegroundColor Green
+            
+            # Clean up old backups (keep only 5 most recent)
+            $backups = Get-ChildItem "$backupPath\backup_*.sql" | Sort-Object LastWriteTime -Descending
+            if ($backups.Count -gt 5) {
+                Write-Host "  Removing old backups (keeping 5 most recent)..." -ForegroundColor Gray
+                $backups | Select-Object -Skip 5 | ForEach-Object {
+                    Remove-Item $_.FullName -Force
+                    Write-Host "    Deleted: $($_.Name)" -ForegroundColor Gray
+                }
+            }
+        } else {
+            Write-Host "  Warning: Backup failed or file empty" -ForegroundColor Yellow
+        }
+    } else {
+        Write-Host "  Skipping backup (cluster not running)" -ForegroundColor Gray
+    }
+    
     Write-Host "Stopping port-forwards..." -ForegroundColor Gray
     Stop-AllPortForwards
     
@@ -291,6 +325,7 @@ function Stop-ClusterSafe {
     
     Write-Host "`nCluster stopped safely." -ForegroundColor Green
     Write-Host "All data preserved (PersistentVolumes, images, configs)" -ForegroundColor Gray
+    Write-Host "Database backup saved in: kubernetes\backups\" -ForegroundColor Cyan
     Write-Host "To resume: Use option [1] Start Cluster" -ForegroundColor Cyan
 }
 
