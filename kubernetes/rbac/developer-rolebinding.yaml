@@ -1,0 +1,15 @@
+# RoleBinding connects ServiceAccount to Role (grants permissions)
+
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: junior-dev-rolebinding
+  namespace: dev
+subjects:
+- kind: ServiceAccount
+  name: junior-dev-sa
+  namespace: dev
+roleRef:
+  kind: Role
+  name: pod-reader
+  apiGroup: rbac.authorization.k8s.io
