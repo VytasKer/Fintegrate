@@ -1,13 +1,27 @@
 # Dockerfile for Event Consumer
+# Multi-stage build for optimized image size
+
+# Stage 1: Builder - Install dependencies
+FROM python:3.11-slim AS builder
+
+WORKDIR /app
+
+# Install build dependencies (needed for psycopg2, pika compilation)
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    gcc \
+    && rm -rf /var/lib/apt/lists/*
+
+# Copy requirements and install to /install directory
+COPY services/event_consumer/requirements.txt .
+RUN pip install --no-cache-dir --prefix=/install -r requirements.txt
+
+# Stage 2: Runtime - Copy only what's needed
 FROM python:3.11-slim
 
 WORKDIR /app
 
-# Copy requirements
-COPY services/event_consumer/requirements.txt .
-
-# Install dependencies
-RUN pip install --no-cache-dir -r requirements.txt
+# Copy installed packages from builder stage
+COPY --from=builder /install /usr/local
 
 # Copy event_consumer and shared modules
 COPY services/event_consumer/ /app/event_consumer/
@@ -18,6 +32,10 @@ ENV PYTHONPATH=/app
 
 # Disable Python output buffering for real-time logs
 ENV PYTHONUNBUFFERED=1
+
+# Create non-root user for security
+RUN useradd -m -u 1000 appuser && chown -R appuser:appuser /app
+USER appuser
 
 # Run the consumer with unbuffered output
 CMD ["python", "-u", "event_consumer/simple_consumer.py"]
