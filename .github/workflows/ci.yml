@@ -70,7 +70,108 @@ jobs:
           push: false
           tags: fintegrate-event-consumer:test
 
-  # Job 3: Validate Kubernetes manifests
+  # Job 3: Test with multiple PostgreSQL versions
+  test-postgres:
+    name: Test with PostgreSQL ${{ matrix.postgres-version }}
+    runs-on: ubuntu-latest
+    
+    strategy:
+      matrix:
+        postgres-version: ['13', '14', '15', '16']  # Test 4 PostgreSQL versions
+    
+    services:
+      postgres:
+        image: postgres:${{ matrix.postgres-version }}
+        env:
+          POSTGRES_USER: test_user
+          POSTGRES_PASSWORD: test_pass
+          POSTGRES_DB: test_db
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 5432:5432
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install psycopg2-binary sqlalchemy
+      
+      - name: Test PostgreSQL connection
+        env:
+          DATABASE_URL: postgresql://test_user:test_pass@localhost:5432/test_db
+        run: |
+          python -c "
+          from sqlalchemy import create_engine, text
+          engine = create_engine('$DATABASE_URL')
+          with engine.connect() as conn:
+              result = conn.execute(text('SELECT version()'))
+              version = result.fetchone()[0]
+              print(f'✅ Connected to PostgreSQL: {version}')
+          "
+      
+      - name: Test table creation
+        env:
+          DATABASE_URL: postgresql://test_user:test_pass@localhost:5432/test_db
+        run: |
+          python -c "
+          from sqlalchemy import create_engine, text
+          engine = create_engine('$DATABASE_URL')
+          with engine.connect() as conn:
+              conn.execute(text('CREATE TABLE IF NOT EXISTS test_table (id SERIAL PRIMARY KEY, name VARCHAR(100))'))
+              conn.execute(text('INSERT INTO test_table (name) VALUES (\\'Test\\')'))
+              conn.commit()
+              result = conn.execute(text('SELECT * FROM test_table'))
+              print(f'✅ Table operations successful: {result.fetchone()}')
+          "
+
+  # Job 4: Test on multiple operating systems
+  test-multi-os:
+    name: Test on ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    
+    strategy:
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]  # Test 3 OS
+        python-version: ['3.11']
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+      
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r services/customer_service/requirements.txt
+      
+      - name: Test Python imports (cross-platform)
+        run: |
+          python -c "import fastapi; import sqlalchemy; import pydantic; print('✅ All imports successful on ${{ matrix.os }}')"
+      
+      - name: Test FastAPI app startup
+        run: |
+          python -c "
+          from services.customer_service.main import app
+          print('✅ FastAPI app loads successfully on ${{ matrix.os }}')
+          "
+
+  # Job 5: Validate Kubernetes manifests
   validate-k8s:
     name: Validate Kubernetes Manifests
     runs-on: ubuntu-latest
