@@ -92,8 +92,17 @@ jobs:
       
       - name: Test event-consumer container
         run: |
-          # Just verify container starts without crashing
-          docker run --name consumer-test fintegrate-event-consumer:test &
+          # Verify container starts with required env vars
+          docker run -d \
+            --name consumer-test \
+            -e CONSUMER_NAME=test \
+            -e RABBITMQ_HOST=localhost \
+            -e RABBITMQ_PORT=5672 \
+            -e RABBITMQ_USER=guest \
+            -e RABBITMQ_PASS=guest \
+            -e CUSTOMER_SERVICE_URL=http://localhost:8000 \
+            fintegrate-event-consumer:test
+          
           sleep 5
           
           # Check if still running (not crashed)
@@ -104,6 +113,7 @@ jobs:
           else
             echo "❌ event-consumer crashed on startup"
             docker logs consumer-test
+            docker rm consumer-test
             exit 1
           fi
 
