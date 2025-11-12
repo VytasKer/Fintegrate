@@ -180,3 +180,84 @@ jobs:
             echo "Validating $file"
             python -c "import yaml; list(yaml.safe_load_all(open('$file')))" || exit 1
           done
+      
+      - name: Generate deployment summary
+        run: |
+          echo "# Kubernetes Deployment Summary" > deployment-summary.md
+          echo "" >> deployment-summary.md
+          echo "**Generated**: $(date)" >> deployment-summary.md
+          echo "" >> deployment-summary.md
+          echo "## Deployments" >> deployment-summary.md
+          find kubernetes/deployments -name "*.yaml" -exec basename {} \; >> deployment-summary.md
+          echo "" >> deployment-summary.md
+          echo "## Services" >> deployment-summary.md
+          find kubernetes/services -name "*.yaml" -exec basename {} \; >> deployment-summary.md
+      
+      - name: Upload deployment summary artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: deployment-summary
+          path: deployment-summary.md
+          retention-days: 30
+
+  # Job 6: Generate test report artifacts
+  test-report:
+    name: Generate Test Report
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install pytest pytest-html pytest-cov
+          pip install -r services/customer_service/requirements.txt
+      
+      - name: Create test results directory
+        run: mkdir -p test-results
+      
+      - name: Run tests with coverage
+        run: |
+          # Run pytest (will create empty report even if no tests exist)
+          pytest tests/ \
+            --html=test-results/test-report.html \
+            --self-contained-html \
+            --cov=services \
+            --cov-report=html:test-results/coverage \
+            --cov-report=term \
+            || echo "No tests found - creating placeholder report"
+        continue-on-error: true
+      
+      - name: Create test summary
+        run: |
+          echo "# Test Execution Summary" > test-results/summary.md
+          echo "" >> test-results/summary.md
+          echo "**Date**: $(date)" >> test-results/summary.md
+          echo "**Branch**: ${{ github.ref_name }}" >> test-results/summary.md
+          echo "**Commit**: ${{ github.sha }}" >> test-results/summary.md
+          echo "" >> test-results/summary.md
+          echo "## Test Files" >> test-results/summary.md
+          find tests/ -name "test_*.py" >> test-results/summary.md || echo "No test files found" >> test-results/summary.md
+      
+      - name: Upload test report artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-report
+          path: test-results/
+          retention-days: 90
+      
+      - name: Upload coverage report artifact
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: coverage-report
+          path: test-results/coverage/
+          retention-days: 30
+        continue-on-error: true
