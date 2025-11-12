@@ -72,8 +72,8 @@ jobs:
       
       - name: Validate YAML syntax
         run: |
-          # Check if YAML files are valid
+          # Check if YAML files are valid (supports multi-document files)
           find kubernetes/ -name "*.yaml" -o -name "*.yml" | while read file; do
             echo "Validating $file"
-            python -c "import yaml; yaml.safe_load(open('$file'))" || exit 1
+            python -c "import yaml; list(yaml.safe_load_all(open('$file')))" || exit 1
           done
