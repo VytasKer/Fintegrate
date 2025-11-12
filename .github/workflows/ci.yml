@@ -162,12 +162,12 @@ jobs:
       
       - name: Test Python imports (cross-platform)
         run: |
-          python -c "import fastapi; import sqlalchemy; import pydantic; print('✅ All imports successful on ${{ matrix.os }}')"
+          python -c "import fastapi; import sqlalchemy; import pydantic; print('[OK] All imports successful on ${{ matrix.os }}')"
       
       - name: Validate Python syntax
         run: |
           python -m py_compile services/customer_service/*.py
-          echo "✅ All Python files compile successfully on ${{ matrix.os }}"
+          echo "[OK] All Python files compile successfully on ${{ matrix.os }}"
 
   # Job 5: Validate Kubernetes manifests
   validate-k8s:
