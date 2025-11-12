@@ -9,29 +9,38 @@ on:
 
 # Jobs to execute
 jobs:
-  # Job 1: Lint and validate code
+  # Job 1: Lint and validate code (Matrix build - multiple Python versions)
   lint:
-    name: Lint Python Code
+    name: Lint Python Code (Python ${{ matrix.python-version }})
     runs-on: ubuntu-latest
+    
+    strategy:
+      matrix:
+        python-version: ['3.10', '3.11', '3.12']  # Test 3 versions in parallel
     
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
       
-      - name: Set up Python
+      - name: Set up Python ${{ matrix.python-version }}
         uses: actions/setup-python@v5
         with:
-          python-version: '3.11'
+          python-version: ${{ matrix.python-version }}
       
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
           pip install ruff
+          pip install -r services/customer_service/requirements.txt
       
       - name: Run linter (Ruff)
         run: |
           ruff check services/ --select E,F --ignore F401
         continue-on-error: true  # Don't fail pipeline, just warn
+      
+      - name: Test Python imports
+        run: |
+          python -c "import fastapi; import sqlalchemy; import pydantic; print('✅ All imports successful')"
 
   # Job 2: Build Docker images
   build:
