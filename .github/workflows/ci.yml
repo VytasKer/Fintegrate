@@ -1,0 +1,79 @@
+name: CI - Build and Test
+
+# When to run this workflow
+on:
+  push:
+    branches: [main]  # Run on push to main branch
+  pull_request:
+    branches: [main]  # Run on pull requests to main
+
+# Jobs to execute
+jobs:
+  # Job 1: Lint and validate code
+  lint:
+    name: Lint Python Code
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install ruff
+      
+      - name: Run linter (Ruff)
+        run: |
+          ruff check services/ --select E,F --ignore F401
+        continue-on-error: true  # Don't fail pipeline, just warn
+
+  # Job 2: Build Docker images
+  build:
+    name: Build Docker Images
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+      
+      - name: Build customer-service image
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: ./docker/Dockerfile.customer_service
+          push: false  # Don't push yet, just validate build
+          tags: fintegrate-customer-service:test
+      
+      - name: Build event-consumer image
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: ./docker/Dockerfile.event_consumer
+          push: false
+          tags: fintegrate-event-consumer:test
+
+  # Job 3: Validate Kubernetes manifests
+  validate-k8s:
+    name: Validate Kubernetes Manifests
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Validate YAML syntax
+        run: |
+          # Check if YAML files are valid
+          find kubernetes/ -name "*.yaml" -o -name "*.yml" | while read file; do
+            echo "Validating $file"
+            python -c "import yaml; yaml.safe_load(open('$file'))" || exit 1
+          done
