@@ -54,3 +54,5 @@ jobs:
           echo "- ${{ secrets.DOCKER_USERNAME }}/fintegrate-customer-service:${{ github.sha }}"
           echo "- ${{ secrets.DOCKER_USERNAME }}/fintegrate-event-consumer:latest"
           echo "- ${{ secrets.DOCKER_USERNAME }}/fintegrate-event-consumer:${{ github.sha }}"
+
+# Testing docker hub credentials 01
