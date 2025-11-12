@@ -4,7 +4,12 @@ name: Build and Push Images
 on:
   push:
     branches: [main]
+    tags:
+      - 'v*.*.*'  # Trigger on version tags (v1.0.0, v1.2.3, etc.)
   workflow_dispatch:  # Allow manual trigger from GitHub UI
+
+env:
+  DOCKER_USERNAME: ${{ secrets.DOCKER_USERNAME }}
 
 jobs:
   build-and-push:
@@ -17,6 +22,35 @@ jobs:
       
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
+      
+      # Extract metadata (tags, labels) for Docker
+      - name: Docker metadata (customer-service)
+        id: meta-customer
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ secrets.DOCKER_USERNAME }}/fintegrate-customer-service
+          tags: |
+            type=ref,event=branch
+            type=ref,event=pr
+            type=semver,pattern={{version}}
+            type=semver,pattern={{major}}.{{minor}}
+            type=semver,pattern={{major}}
+            type=sha,prefix=sha-
+            type=raw,value=latest,enable={{is_default_branch}}
+      
+      - name: Docker metadata (event-consumer)
+        id: meta-consumer
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ secrets.DOCKER_USERNAME }}/fintegrate-event-consumer
+          tags: |
+            type=ref,event=branch
+            type=ref,event=pr
+            type=semver,pattern={{version}}
+            type=semver,pattern={{major}}.{{minor}}
+            type=semver,pattern={{major}}
+            type=sha,prefix=sha-
+            type=raw,value=latest,enable={{is_default_branch}}
       
       # LOGIN USING SECRETS (not hardcoded passwords)
       - name: Login to Docker Hub
@@ -31,10 +65,11 @@ jobs:
         with:
           context: .
           file: ./docker/Dockerfile.customer_service
-          push: true  # Push to Docker Hub
-          tags: |
-            ${{ secrets.DOCKER_USERNAME }}/fintegrate-customer-service:latest
-            ${{ secrets.DOCKER_USERNAME }}/fintegrate-customer-service:${{ github.sha }}
+          push: true
+          tags: ${{ steps.meta-customer.outputs.tags }}
+          labels: ${{ steps.meta-customer.outputs.labels }}
+          cache-from: type=registry,ref=${{ secrets.DOCKER_USERNAME }}/fintegrate-customer-service:latest
+          cache-to: type=inline
       
       # Build and push event-consumer image
       - name: Build and push event-consumer
@@ -43,16 +78,23 @@ jobs:
           context: .
           file: ./docker/Dockerfile.event_consumer
           push: true
-          tags: |
-            ${{ secrets.DOCKER_USERNAME }}/fintegrate-event-consumer:latest
-            ${{ secrets.DOCKER_USERNAME }}/fintegrate-event-consumer:${{ github.sha }}
+          tags: ${{ steps.meta-consumer.outputs.tags }}
+          labels: ${{ steps.meta-consumer.outputs.labels }}
+          cache-from: type=registry,ref=${{ secrets.DOCKER_USERNAME }}/fintegrate-event-consumer:latest
+          cache-to: type=inline
       
       - name: Image push summary
         run: |
-          echo "✅ Images pushed to Docker Hub:"
-          echo "- ${{ secrets.DOCKER_USERNAME }}/fintegrate-customer-service:latest"
-          echo "- ${{ secrets.DOCKER_USERNAME }}/fintegrate-customer-service:${{ github.sha }}"
-          echo "- ${{ secrets.DOCKER_USERNAME }}/fintegrate-event-consumer:latest"
-          echo "- ${{ secrets.DOCKER_USERNAME }}/fintegrate-event-consumer:${{ github.sha }}"
+          echo "### Docker Images Published :rocket:" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**customer-service tags:**" >> $GITHUB_STEP_SUMMARY
+          echo '```' >> $GITHUB_STEP_SUMMARY
+          echo "${{ steps.meta-customer.outputs.tags }}" >> $GITHUB_STEP_SUMMARY
+          echo '```' >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**event-consumer tags:**" >> $GITHUB_STEP_SUMMARY
+          echo '```' >> $GITHUB_STEP_SUMMARY
+          echo "${{ steps.meta-consumer.outputs.tags }}" >> $GITHUB_STEP_SUMMARY
+          echo '```' >> $GITHUB_STEP_SUMMARY
 
 # Testing docker hub credentials 01
