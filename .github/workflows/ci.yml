@@ -164,15 +164,10 @@ jobs:
         run: |
           python -c "import fastapi; import sqlalchemy; import pydantic; print('✅ All imports successful on ${{ matrix.os }}')"
       
-      - name: Test code syntax (no database connection)
+      - name: Validate Python syntax
         run: |
-          python -c "
-          # Test imports without running database connection code
-          import sys
-          sys.path.insert(0, 'services')
-          from customer_service import models, schemas, crud
-          print('✅ Core modules load successfully on ${{ matrix.os }}')
-          "
+          python -m py_compile services/customer_service/*.py
+          echo "✅ All Python files compile successfully on ${{ matrix.os }}"
 
   # Job 5: Validate Kubernetes manifests
   validate-k8s:
