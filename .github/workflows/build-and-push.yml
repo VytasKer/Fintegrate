@@ -105,6 +105,9 @@ jobs:
           
           sleep 5
           
+          echo "Container logs:"
+          docker logs consumer-test
+          
           # Check if still running (not crashed)
           if docker ps | grep -q consumer-test; then
             echo "✅ event-consumer container started successfully"
@@ -112,7 +115,6 @@ jobs:
             docker rm consumer-test
           else
             echo "❌ event-consumer crashed on startup"
-            docker logs consumer-test
             docker rm consumer-test
             exit 1
           fi
