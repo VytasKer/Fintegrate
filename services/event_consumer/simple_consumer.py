@@ -8,7 +8,7 @@ import json
 import sys
 import requests
 import os
-from datetime import datetime
+from datetime import datetime; from services.shared.utils import utcnow
 
 # Global variable for customer service URL (set in main)
 CUSTOMER_SERVICE_URL = "http://localhost:8000"
@@ -61,7 +61,7 @@ def callback(ch, method, properties, body):
             confirmation_payload = {
                 "event_id": event_id,
                 "status": processing_status,
-                "received_at": datetime.utcnow().isoformat() + "Z",
+                "received_at": utcnow().isoformat() + "Z",
                 "failure_reason": failure_reason,
                 "consumer_name": CONSUMER_NAME
             }
@@ -100,7 +100,7 @@ def callback(ch, method, properties, body):
                 confirmation_payload = {
                     "event_id": event_id,
                     "status": processing_status,
-                    "received_at": datetime.utcnow().isoformat() + "Z",
+                    "received_at": utcnow().isoformat() + "Z",
                     "failure_reason": failure_reason,
                     "consumer_name": CONSUMER_NAME
                 }
@@ -137,7 +137,7 @@ def callback(ch, method, properties, body):
                     confirmation_payload = {
                         "event_id": event_id,
                         "status": processing_status,
-                        "received_at": datetime.utcnow().isoformat() + "Z",
+                        "received_at": utcnow().isoformat() + "Z",
                         "failure_reason": f"Max retries exceeded: {failure_reason}",
                         "consumer_name": CONSUMER_NAME
                     }

@@ -5,8 +5,9 @@ from sqlalchemy.orm import Session
 from uuid import UUID
 import uuid
 import os
-from datetime import datetime
+from datetime import datetime, timedelta
 from services.customer_service.database import get_db
+from services.shared.utils import utcnow
 from services.customer_service.schemas import (
     CustomerCreate, 
     CustomerCreateResponse, 
@@ -84,7 +85,7 @@ def create_customer(customer: CustomerCreate, request: Request, db: Session = De
             publish_status="pending",  # Default to pending
             published_at=None,
             publish_try_count=1,
-            publish_last_tried_at=datetime.utcnow(),
+            publish_last_tried_at=utcnow(),
             publish_failure_reason=None,
             consumer_id=consumer.consumer_id  # Track which consumer created this event
         )
@@ -108,11 +109,11 @@ def create_customer(customer: CustomerCreate, request: Request, db: Session = De
                 if publish_success:
                     # Update event record - successfully published
                     event.publish_status = "published"
-                    event.published_at = datetime.utcnow()
+                    event.published_at = utcnow()
                     event.publish_failure_reason = None
                     # Track initial delivery attempt
                     event.deliver_try_count = 1
-                    event.deliver_last_tried_at = datetime.utcnow()
+                    event.deliver_last_tried_at = utcnow()
                     db.commit()
                     print(f"RabbitMQ publish successful, event marked as published")
                 else:
@@ -495,7 +496,7 @@ def delete_customer(customer_id: UUID, request: Request, db: Session = Depends(g
             publish_status="pending",
             published_at=None,
             publish_try_count=1,
-            publish_last_tried_at=datetime.utcnow(),
+            publish_last_tried_at=utcnow(),
             publish_failure_reason=None,
             consumer_id=consumer.consumer_id
         )
@@ -517,11 +518,11 @@ def delete_customer(customer_id: UUID, request: Request, db: Session = Depends(g
                 
                 if publish_success:
                     event.publish_status = "published"
-                    event.published_at = datetime.utcnow()
+                    event.published_at = utcnow()
                     event.publish_failure_reason = None
                     # Track initial delivery attempt
                     event.deliver_try_count = 1
-                    event.deliver_last_tried_at = datetime.utcnow()
+                    event.deliver_last_tried_at = utcnow()
                     db.commit()
                     print(f"RabbitMQ publish successful, event marked as published")
                 else:
@@ -660,7 +661,7 @@ def change_customer_status(status_change: CustomerStatusChange, request: Request
             publish_status="pending",
             published_at=None,
             publish_try_count=1,
-            publish_last_tried_at=datetime.utcnow(),
+            publish_last_tried_at=utcnow(),
             publish_failure_reason=None,
             consumer_id=consumer.consumer_id
         )
@@ -682,11 +683,11 @@ def change_customer_status(status_change: CustomerStatusChange, request: Request
                 
                 if publish_success:
                     event.publish_status = "published"
-                    event.published_at = datetime.utcnow()
+                    event.published_at = utcnow()
                     event.publish_failure_reason = None
                     # Track initial delivery attempt
                     event.deliver_try_count = 1
-                    event.deliver_last_tried_at = datetime.utcnow()
+                    event.deliver_last_tried_at = utcnow()
                     db.commit()
                     print(f"RabbitMQ publish successful, event marked as published")
                 else:
@@ -744,7 +745,7 @@ def resend_pending_events(resend_request: EventResendRequest, request: Request, 
         from sqlalchemy import and_
         
         # Calculate cutoff date
-        cutoff_date = datetime.utcnow() - timedelta(days=resend_request.period_in_days)
+        cutoff_date = utcnow() - timedelta(days=resend_request.period_in_days)
         
         # Build query filters
         filters = [
@@ -825,9 +826,9 @@ def resend_pending_events(resend_request: EventResendRequest, request: Request, 
                 if publish_success:
                     # Update event record - successfully published
                     event.publish_status = 'published'
-                    event.published_at = datetime.utcnow()
+                    event.published_at = utcnow()
                     event.publish_try_count += 1
-                    event.publish_last_tried_at = datetime.utcnow()
+                    event.publish_last_tried_at = utcnow()
                     event.publish_failure_reason = None
                     succeeded += 1
                 else:
@@ -839,7 +840,7 @@ def resend_pending_events(resend_request: EventResendRequest, request: Request, 
             # If publishing failed, update record
             if not publish_success:
                 event.publish_try_count += 1
-                event.publish_last_tried_at = datetime.utcnow()
+                event.publish_last_tried_at = utcnow()
                 event.publish_failure_reason = failure_reason
                 
                 # Mark as permanently failed if exceeded max retries (10)
@@ -926,7 +927,7 @@ def get_events_health(request: Request, db: Session = Depends(get_db)):
         # Calculate age in seconds
         oldest_pending_age_seconds = None
         if oldest_pending:
-            age_delta = datetime.utcnow() - oldest_pending
+            age_delta = utcnow() - oldest_pending
             oldest_pending_age_seconds = round(age_delta.total_seconds(), 2)
         
         # Count failed events
@@ -1033,7 +1034,7 @@ def confirm_event_delivery(confirmation: EventConfirmDeliveryRequest, request: R
         # Update event delivery status
         if confirmation.status in ['received', 'processed']:
             event.deliver_status = 'delivered'
-            event.delivered_at = datetime.utcnow()
+            event.delivered_at = utcnow()
             event.deliver_failure_reason = None
         else:  # status == 'failed'
             event.deliver_status = 'failed'
@@ -1082,7 +1083,7 @@ def redeliver_pending_events(redeliver_request: EventRedeliverRequest, request: 
         from sqlalchemy import and_
         
         # Calculate cutoff date
-        cutoff_date = datetime.utcnow() - timedelta(days=redeliver_request.period_in_days)
+        cutoff_date = utcnow() - timedelta(days=redeliver_request.period_in_days)
         
         # Build query filters - events that were published but not delivered
         filters = [
@@ -1164,7 +1165,7 @@ def redeliver_pending_events(redeliver_request: EventRedeliverRequest, request: 
                 if publish_success:
                     # Update delivery attempt tracking
                     event.deliver_try_count += 1
-                    event.deliver_last_tried_at = datetime.utcnow()
+                    event.deliver_last_tried_at = utcnow()
                     event.deliver_failure_reason = None
                     succeeded += 1
                 else:
@@ -1176,7 +1177,7 @@ def redeliver_pending_events(redeliver_request: EventRedeliverRequest, request: 
             # If republishing failed, update record
             if not publish_success:
                 event.deliver_try_count += 1
-                event.deliver_last_tried_at = datetime.utcnow()
+                event.deliver_last_tried_at = utcnow()
                 event.deliver_failure_reason = failure_reason
                 
                 # Mark as permanently failed if exceeded max retries (10)
@@ -1272,9 +1273,9 @@ def create_consumer_endpoint(consumer: ConsumerCreate, request: Request, db: Ses
                 
                 if publish_success:
                     event.publish_status = "published"
-                    event.published_at = datetime.utcnow()
+                    event.published_at = utcnow()
                     event.deliver_try_count = 1
-                    event.deliver_last_tried_at = datetime.utcnow()
+                    event.deliver_last_tried_at = utcnow()
                 else:
                     event.publish_failure_reason = "RabbitMQ publish returned False"
                 db.commit()
@@ -1341,9 +1342,9 @@ def rotate_consumer_key(request: Request, db: Session = Depends(get_db), consume
                 
                 if publish_success:
                     event.publish_status = "published"
-                    event.published_at = datetime.utcnow()
+                    event.published_at = utcnow()
                     event.deliver_try_count = 1
-                    event.deliver_last_tried_at = datetime.utcnow()
+                    event.deliver_last_tried_at = utcnow()
                 else:
                     event.publish_failure_reason = "RabbitMQ publish returned False"
                 db.commit()
@@ -1478,9 +1479,9 @@ def deactivate_consumer_key(request: Request, db: Session = Depends(get_db), con
                 
                 if publish_success:
                     event.publish_status = "published"
-                    event.published_at = datetime.utcnow()
+                    event.published_at = utcnow()
                     event.deliver_try_count = 1
-                    event.deliver_last_tried_at = datetime.utcnow()
+                    event.deliver_last_tried_at = utcnow()
                 else:
                     event.publish_failure_reason = "RabbitMQ publish returned False"
                 db.commit()
@@ -1546,9 +1547,9 @@ def change_consumer_status_admin(
                 
                 if publish_success:
                     event.publish_status = "published"
-                    event.published_at = datetime.utcnow()
+                    event.published_at = utcnow()
                     event.deliver_try_count = 1
-                    event.deliver_last_tried_at = datetime.utcnow()
+                    event.deliver_last_tried_at = utcnow()
                 else:
                     event.publish_failure_reason = "RabbitMQ publish returned False"
                 db.commit()
