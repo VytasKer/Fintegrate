@@ -11,7 +11,7 @@ from services.shared.utils import utcnow
 import uuid
 
 
-async def verify_api_key(request: Request):
+def verify_api_key(request: Request):
     """
     Dependency to verify X-API-Key header and attach consumer to request state.
     Raises HTTPException if key invalid or missing.
@@ -151,7 +151,7 @@ def _log_rate_limit_violation_once_per_hour(redis_client, consumer_id, hour_buck
         print(f"Redis error during audit logging check: {redis_error}")
 
 
-async def rate_limit_middleware(request: Request):
+def rate_limit_middleware(request: Request):
     """
     Rate limiting middleware for authenticated API key requests.
     Uses Redis to track request counts per consumer per minute.

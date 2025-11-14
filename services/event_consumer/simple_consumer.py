@@ -110,7 +110,7 @@ def callback(ch, method, properties, body):
                     timeout=5
                 )
                 print(f"✓ Failed delivery reported for event {event_id}")
-            except:
+            except Exception:
                 pass  # Silently ignore API errors for failed messages
         
     except Exception as transient_error:
@@ -147,7 +147,7 @@ def callback(ch, method, properties, body):
                         timeout=5
                     )
                     print(f"✓ Failed delivery (max retries) reported for event {event_id}")
-                except:
+                except Exception:
                     pass
         else:
             # Increment retry counter and republish with delay
@@ -258,9 +258,9 @@ def main():
         print(f"Consumer Name: {consumer_name}")
         print(f"Queue: {queue_name}")
         print(f"DLQ: {dlq_name}")
-        print(f"Exchange: customer_events")
+        print("Exchange: customer_events")
         print(f"Routing Key Pattern: customer.*.{consumer_name}")
-        print(f"Max Retries: 3")
+        print("Max Retries: 3")
         print("Press Ctrl+C to exit")
         print("="*60 + "\n")
         

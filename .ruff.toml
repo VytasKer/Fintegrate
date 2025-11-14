@@ -1,3 +1,6 @@
+# Ruff configuration
+line-length = 120
+
 [lint]
 # Select rules: E (pycodestyle errors), F (pyflakes)
 select = ["E", "F"]
@@ -5,9 +8,8 @@ select = ["E", "F"]
 # Ignore F401 (unused imports - handled separately)
 ignore = ["F401"]
 
-# Line length limit (Black default is 88, we use 120 for flexibility)
-line-length = 120
-
 [format]
 # Use Black-compatible formatting
-line-length = 120
+indent-style = "space"
+quote-style = "double"
+line-ending = "auto"

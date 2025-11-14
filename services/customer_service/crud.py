@@ -456,7 +456,7 @@ def create_consumer(db: Session, name: str, description: Optional[str] = None) -
         metadata_json={"created_by": "system"},
         publish_status="pending",  # Will be published by route handler
         publish_try_count=1,
-        publish_last_tried_at=datetime.utcnow()
+        publish_last_tried_at=utcnow()
     )
     db.add(db_event)
     
@@ -507,7 +507,7 @@ def get_consumer_by_name(db: Session, name: str) -> Optional[Consumer]:
     return db.query(Consumer).filter(Consumer.name == name).first()
 
 
-def rotate_api_key(db: Session, consumer_id: UUID) -> Optional[str]:
+def rotate_api_key(db: Session, consumer_id: UUID) -> tuple[str, CustomerEvent]:
     """
     Deactivate existing active key and generate new one.
     Returns plaintext new key or None if consumer not found.
@@ -545,7 +545,7 @@ def rotate_api_key(db: Session, consumer_id: UUID) -> Optional[str]:
         metadata_json={"rotated_at": utcnow().isoformat(), "rotated_by": "consumer"},
         publish_status="pending",  # Will be published by route handler
         publish_try_count=1,
-        publish_last_tried_at=datetime.utcnow()
+        publish_last_tried_at=utcnow()
     )
     db.add(db_event)
     
@@ -576,7 +576,7 @@ def deactivate_api_key(db: Session, consumer_id: UUID):
             metadata_json={"deactivated_at": utcnow().isoformat(), "deactivated_by": "consumer"},
             publish_status="pending",  # Will be published by route handler
             publish_try_count=1,
-            publish_last_tried_at=datetime.utcnow()
+            publish_last_tried_at=utcnow()
         )
         db.add(db_event)
         db.commit()
@@ -620,7 +620,7 @@ def change_consumer_status(db: Session, consumer_id: UUID, new_status: str):
         metadata_json={"changed_at": utcnow().isoformat(), "changed_by": "admin"},
         publish_status="pending",  # Will be published by route handler
         publish_try_count=1,
-        publish_last_tried_at=datetime.utcnow()
+        publish_last_tried_at=utcnow()
     )
     db.add(db_event)
     

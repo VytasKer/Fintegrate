@@ -119,7 +119,7 @@ def create_customer(customer: CustomerCreate, request: Request, db: Session = De
                     event.deliver_try_count = 1
                     event.deliver_last_tried_at = utcnow()
                     db.commit()
-                    print(f"RabbitMQ publish successful, event marked as published")
+                    print("RabbitMQ publish successful, event marked as published")
                 else:
                     # Update failure reason
                     event.publish_failure_reason = PUBLISH_ERROR_RABBITMQ_FALSE
@@ -129,7 +129,7 @@ def create_customer(customer: CustomerCreate, request: Request, db: Session = De
                 # Update failure reason
                 event.publish_failure_reason = PUBLISH_ERROR_PUBLISHER_NONE
                 db.commit()
-                print(f"Publisher is None - RabbitMQ connection failed")
+                print("Publisher is None - RabbitMQ connection failed")
                 
         except Exception as mq_error:
             # Update failure reason
@@ -528,7 +528,7 @@ def delete_customer(customer_id: UUID, request: Request, db: Session = Depends(g
                     event.deliver_try_count = 1
                     event.deliver_last_tried_at = utcnow()
                     db.commit()
-                    print(f"RabbitMQ publish successful, event marked as published")
+                    print("RabbitMQ publish successful, event marked as published")
                 else:
                     event.publish_failure_reason = PUBLISH_ERROR_RABBITMQ_FALSE
                     db.commit()
@@ -536,7 +536,7 @@ def delete_customer(customer_id: UUID, request: Request, db: Session = Depends(g
             else:
                 event.publish_failure_reason = PUBLISH_ERROR_PUBLISHER_NONE
                 db.commit()
-                print(f"Publisher is None - RabbitMQ connection failed")
+                print("Publisher is None - RabbitMQ connection failed")
         except Exception as mq_error:
             event.publish_failure_reason = f"{type(mq_error).__name__}: {str(mq_error)}"
             db.commit()
@@ -693,7 +693,7 @@ def change_customer_status(status_change: CustomerStatusChange, request: Request
                     event.deliver_try_count = 1
                     event.deliver_last_tried_at = utcnow()
                     db.commit()
-                    print(f"RabbitMQ publish successful, event marked as published")
+                    print("RabbitMQ publish successful, event marked as published")
                 else:
                     event.publish_failure_reason = PUBLISH_ERROR_RABBITMQ_FALSE
                     db.commit()
@@ -701,7 +701,7 @@ def change_customer_status(status_change: CustomerStatusChange, request: Request
             else:
                 event.publish_failure_reason = PUBLISH_ERROR_PUBLISHER_NONE
                 db.commit()
-                print(f"Publisher is None - RabbitMQ connection failed")
+                print("Publisher is None - RabbitMQ connection failed")
         except Exception as mq_error:
             event.publish_failure_reason = f"{type(mq_error).__name__}: {str(mq_error)}"
             db.commit()

@@ -165,7 +165,7 @@ class EventPublisher:
             if connection and not connection.is_closed:
                 try:
                     connection.close()
-                except:
+                except Exception:
                     pass
     
     def close(self):
