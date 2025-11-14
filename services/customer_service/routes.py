@@ -41,6 +41,10 @@ from services.customer_service.schemas import (
     ConsumerChangeStatusStandardResponse
 )
 from services.customer_service import crud
+from services.customer_service.constants import (
+    PUBLISH_ERROR_RABBITMQ_FALSE,
+    PUBLISH_ERROR_PUBLISHER_NONE
+)
 from services.shared.response_handler import success_response, error_response
 from services.shared.audit_logger import log_error_to_audit
 from services.shared.event_publisher import get_event_publisher
@@ -118,12 +122,12 @@ def create_customer(customer: CustomerCreate, request: Request, db: Session = De
                     print(f"RabbitMQ publish successful, event marked as published")
                 else:
                     # Update failure reason
-                    event.publish_failure_reason = "RabbitMQ publish returned False"
+                    event.publish_failure_reason = PUBLISH_ERROR_RABBITMQ_FALSE
                     db.commit()
                     print(f"RabbitMQ publish failed: {event.publish_failure_reason}")
             else:
                 # Update failure reason
-                event.publish_failure_reason = "EventPublisher connection is None"
+                event.publish_failure_reason = PUBLISH_ERROR_PUBLISHER_NONE
                 db.commit()
                 print(f"Publisher is None - RabbitMQ connection failed")
                 
@@ -526,11 +530,11 @@ def delete_customer(customer_id: UUID, request: Request, db: Session = Depends(g
                     db.commit()
                     print(f"RabbitMQ publish successful, event marked as published")
                 else:
-                    event.publish_failure_reason = "RabbitMQ publish returned False"
+                    event.publish_failure_reason = PUBLISH_ERROR_RABBITMQ_FALSE
                     db.commit()
                     print(f"RabbitMQ publish failed: {event.publish_failure_reason}")
             else:
-                event.publish_failure_reason = "EventPublisher connection is None"
+                event.publish_failure_reason = PUBLISH_ERROR_PUBLISHER_NONE
                 db.commit()
                 print(f"Publisher is None - RabbitMQ connection failed")
         except Exception as mq_error:
@@ -691,11 +695,11 @@ def change_customer_status(status_change: CustomerStatusChange, request: Request
                     db.commit()
                     print(f"RabbitMQ publish successful, event marked as published")
                 else:
-                    event.publish_failure_reason = "RabbitMQ publish returned False"
+                    event.publish_failure_reason = PUBLISH_ERROR_RABBITMQ_FALSE
                     db.commit()
                     print(f"RabbitMQ publish failed: {event.publish_failure_reason}")
             else:
-                event.publish_failure_reason = "EventPublisher connection is None"
+                event.publish_failure_reason = PUBLISH_ERROR_PUBLISHER_NONE
                 db.commit()
                 print(f"Publisher is None - RabbitMQ connection failed")
         except Exception as mq_error:
@@ -832,7 +836,7 @@ def resend_pending_events(resend_request: EventResendRequest, request: Request, 
                     event.publish_failure_reason = None
                     succeeded += 1
                 else:
-                    failure_reason = "RabbitMQ publish returned False"
+                    failure_reason = PUBLISH_ERROR_RABBITMQ_FALSE
                     
             except Exception as publish_error:
                 failure_reason = f"{type(publish_error).__name__}: {str(publish_error)}"
@@ -1169,7 +1173,7 @@ def redeliver_pending_events(redeliver_request: EventRedeliverRequest, request: 
                     event.deliver_failure_reason = None
                     succeeded += 1
                 else:
-                    failure_reason = "RabbitMQ publish returned False"
+                    failure_reason = PUBLISH_ERROR_RABBITMQ_FALSE
                     
             except Exception as publish_error:
                 failure_reason = f"{type(publish_error).__name__}: {str(publish_error)}"
@@ -1277,10 +1281,10 @@ def create_consumer_endpoint(consumer: ConsumerCreate, request: Request, db: Ses
                     event.deliver_try_count = 1
                     event.deliver_last_tried_at = utcnow()
                 else:
-                    event.publish_failure_reason = "RabbitMQ publish returned False"
+                    event.publish_failure_reason = PUBLISH_ERROR_RABBITMQ_FALSE
                 db.commit()
             else:
-                event.publish_failure_reason = "EventPublisher connection is None"
+                event.publish_failure_reason = PUBLISH_ERROR_PUBLISHER_NONE
                 db.commit()
         except Exception as mq_error:
             event.publish_failure_reason = f"{type(mq_error).__name__}: {str(mq_error)}"
@@ -1346,10 +1350,10 @@ def rotate_consumer_key(request: Request, db: Session = Depends(get_db), consume
                     event.deliver_try_count = 1
                     event.deliver_last_tried_at = utcnow()
                 else:
-                    event.publish_failure_reason = "RabbitMQ publish returned False"
+                    event.publish_failure_reason = PUBLISH_ERROR_RABBITMQ_FALSE
                 db.commit()
             else:
-                event.publish_failure_reason = "EventPublisher connection is None"
+                event.publish_failure_reason = PUBLISH_ERROR_PUBLISHER_NONE
                 db.commit()
         except Exception as mq_error:
             event.publish_failure_reason = f"{type(mq_error).__name__}: {str(mq_error)}"
@@ -1483,10 +1487,10 @@ def deactivate_consumer_key(request: Request, db: Session = Depends(get_db), con
                     event.deliver_try_count = 1
                     event.deliver_last_tried_at = utcnow()
                 else:
-                    event.publish_failure_reason = "RabbitMQ publish returned False"
+                    event.publish_failure_reason = PUBLISH_ERROR_RABBITMQ_FALSE
                 db.commit()
             else:
-                event.publish_failure_reason = "EventPublisher connection is None"
+                event.publish_failure_reason = PUBLISH_ERROR_PUBLISHER_NONE
                 db.commit()
         except Exception as mq_error:
             event.publish_failure_reason = f"{type(mq_error).__name__}: {str(mq_error)}"
@@ -1551,10 +1555,10 @@ def change_consumer_status_admin(
                     event.deliver_try_count = 1
                     event.deliver_last_tried_at = utcnow()
                 else:
-                    event.publish_failure_reason = "RabbitMQ publish returned False"
+                    event.publish_failure_reason = PUBLISH_ERROR_RABBITMQ_FALSE
                 db.commit()
             else:
-                event.publish_failure_reason = "EventPublisher connection is None"
+                event.publish_failure_reason = PUBLISH_ERROR_PUBLISHER_NONE
                 db.commit()
         except Exception as mq_error:
             event.publish_failure_reason = f"{type(mq_error).__name__}: {str(mq_error)}"

@@ -7,6 +7,7 @@ kubernetes/kubectl-commands.md
 kubernetes/KUBERNETES_PRACTICE_SOLUTIONS.md
 kubernetes/secrets/*.yaml
 kubernetes/backups/
+sonar-issues.json
 
 # Python
 __pycache__/

@@ -7,6 +7,7 @@ from sqlalchemy.orm import Session
 from services.customer_service.database import SessionLocal
 from services.customer_service import crud
 from services.shared.response_handler import error_response
+from services.shared.utils import utcnow
 import uuid
 
 
@@ -176,7 +177,7 @@ async def rate_limit_middleware(request: Request):
     
     try:
         # Calculate current minute bucket
-        current_timestamp = datetime.utcnow().timestamp()
+        current_timestamp = utcnow().timestamp()
         minute_bucket = math.floor(current_timestamp / 60)
         
         # Redis key format: ratelimit:consumer:{consumer_id}:{minute_bucket}
