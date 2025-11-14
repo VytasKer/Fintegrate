@@ -507,7 +507,7 @@ def get_consumer_by_name(db: Session, name: str) -> Optional[Consumer]:
     return db.query(Consumer).filter(Consumer.name == name).first()
 
 
-def rotate_api_key(db: Session, consumer_id: UUID) -> tuple[str, CustomerEvent]:
+def rotate_api_key(db: Session, consumer_id: UUID) -> tuple[str, CustomerEvent] | None:
     """
     Deactivate existing active key and generate new one.
     Returns plaintext new key or None if consumer not found.
