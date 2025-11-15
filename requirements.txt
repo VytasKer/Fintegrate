@@ -7,3 +7,9 @@ pydantic==2.5.0
 pydantic-settings==2.1.0
 python-dotenv==1.0.0
 pyyaml==6.0.1
+
+# Code quality and security tools
+pre-commit==4.0.1
+ruff==0.7.4
+black==24.10.0
+detect-secrets==1.5.0

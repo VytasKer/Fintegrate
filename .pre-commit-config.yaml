@@ -1,0 +1,81 @@
+# Pre-commit hooks configuration (Windows-compatible minimal version)
+# Runs automated checks before git commit completes
+# Install: pip install pre-commit && pre-commit install
+
+repos:
+  # Ruff - Fast Python linter (system installed, no virtualenv needed)
+  - repo: local
+    hooks:
+      - id: ruff-check
+        name: Ruff Linter
+        entry: venv/Scripts/ruff.exe check --fix --exit-non-zero-on-fix --config=.ruff.toml
+        language: system
+        types: [python]
+        exclude: ^(venv/|\.venv/|__pycache__/)
+
+      - id: ruff-format
+        name: Ruff Formatter
+        entry: venv/Scripts/ruff.exe format --config=.ruff.toml
+        language: system
+        types: [python]
+        exclude: ^(venv/|\.venv/|__pycache__/)
+
+  # Black - Python code formatter (system installed)
+  - repo: local
+    hooks:
+      - id: black
+        name: Black Formatter
+        entry: venv/Scripts/black.exe --line-length=120
+        language: system
+        types: [python]
+        exclude: ^(venv/|migrations/)
+
+  # detect-secrets - Prevent committing secrets (disabled - use CI scan instead)
+  # - repo: local
+  #   hooks:
+  #     - id: detect-secrets
+  #       name: Detect Secrets
+  #       entry: venv/Scripts/detect-secrets.exe scan
+  #       language: system
+  #       types: [text]
+
+  # General file checks (local Python checks, no remote repos)
+  - repo: local
+    hooks:
+      - id: check-yaml
+        name: Check YAML Syntax
+        entry: python -c "import sys, yaml; [yaml.safe_load(open(f)) for f in sys.argv[1:]]"
+        language: system
+        types: [yaml]
+
+      - id: check-json
+        name: Check JSON Syntax
+        entry: python -c "import sys, json; [json.load(open(f)) for f in sys.argv[1:]]"
+        language: system
+        types: [json]
+        exclude: package-lock\.json
+
+      - id: check-toml
+        name: Check TOML Syntax
+        entry: python -c "import sys, tomllib; [tomllib.load(open(f, 'rb')) for f in sys.argv[1:]]"
+        language: system
+        types: [toml]
+
+      - id: check-ast
+        name: Validate Python AST
+        entry: python -m py_compile
+        language: system
+        types: [python]
+
+      # Merge conflict check disabled (false positives on Windows)
+      # - id: check-merge-conflict
+      #   name: Check for Merge Conflicts
+      #   entry: python -c "import sys; [sys.exit(1) if any(m in open(f, encoding='utf-8', errors='ignore').read() for m in ['<<<<<<< ', '======= ', '>>>>>>> ']) else None for f in sys.argv[1:]]"
+      #   language: system
+      #   types: [text]
+
+      - id: check-large-files
+        name: Check for Large Files
+        entry: python -c "import sys, os; [sys.exit(1) if os.path.getsize(f) > 512000 else None for f in sys.argv[1:]]"
+        language: system
+        types: [file]
