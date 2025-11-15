@@ -1,94 +1,26 @@
 {
-   "total":7,
+   "total":6,
    "p":1,
    "ps":100,
    "paging":{
       "pageIndex":1,
       "pageSize":100,
-      "total":7
+      "total":6
    },
-   "effortTotal":79,
-   "debtTotal":79,
+   "effortTotal":74,
+   "debtTotal":74,
    "issues":[
-      {
-         "key":"AZqEFphKmTnKhiYd8-V3",
-         "rule":"python:S5886",
-         "severity":"MAJOR",
-         "component":"VytasKer_Fintegrate:services/customer_service/crud.py",
-         "project":"VytasKer_Fintegrate",
-         "line":518,
-         "hash":"449f1214372c5738fe3cd1ae063cb034",
-         "textRange":{
-            "startLine":518,
-            "endLine":518,
-            "startOffset":15,
-            "endOffset":19
-         },
-         "flows":[
-            {
-               "locations":[
-                  {
-                     "component":"VytasKer_Fintegrate:services/customer_service/crud.py",
-                     "textRange":{
-                        "startLine":510,
-                        "endLine":510,
-                        "startOffset":4,
-                        "endOffset":18
-                     },
-                     "msg":"Function definition."
-                  }
-               ]
-            },
-            {
-               "locations":[
-                  {
-                     "component":"VytasKer_Fintegrate:services/customer_service/crud.py",
-                     "textRange":{
-                        "startLine":510,
-                        "endLine":510,
-                        "startOffset":54,
-                        "endOffset":79
-                     },
-                     "msg":"Type hint."
-                  }
-               ]
-            }
-         ],
-         "status":"OPEN",
-         "message":"Return a value of type \"tuple[str, CustomerEvent]\" instead of \"NoneType\" or update function \"rotate_api_key\" type hint.",
-         "effort":"5min",
-         "debt":"5min",
-         "assignee":"VytasKer-yb9Qt@github",
-         "author":"vytaskereisis01@gmail.com",
-         "tags":[
-            "typing"
-         ],
-         "creationDate":"2025-11-14T20:37:05+0000",
-         "updateDate":"2025-11-14T20:37:05+0000",
-         "type":"CODE_SMELL",
-         "organization":"vytasker",
-         "cleanCodeAttribute":"LOGICAL",
-         "cleanCodeAttributeCategory":"INTENTIONAL",
-         "impacts":[
-            {
-               "softwareQuality":"MAINTAINABILITY",
-               "severity":"MEDIUM"
-            }
-         ],
-         "issueStatus":"OPEN",
-         "projectName":"Fintegrate"
-      },
       {
          "key":"AZqEFpfRmTnKhiYd8-V2",
          "rule":"python:S1192",
          "severity":"CRITICAL",
          "component":"VytasKer_Fintegrate:services/customer_service/routes.py",
          "project":"VytasKer_Fintegrate",
-         "line":122,
+         "line":126,
          "hash":"fb15b81b812ac998287e3dbb640b3e6d",
          "textRange":{
-            "startLine":122,
-            "endLine":122,
+            "startLine":126,
+            "endLine":126,
             "startOffset":26,
             "endOffset":82
          },
@@ -98,8 +30,8 @@
                   {
                      "component":"VytasKer_Fintegrate:services/customer_service/routes.py",
                      "textRange":{
-                        "startLine":531,
-                        "endLine":531,
+                        "startLine":559,
+                        "endLine":559,
                         "startOffset":26,
                         "endOffset":82
                      },
@@ -112,8 +44,8 @@
                   {
                      "component":"VytasKer_Fintegrate:services/customer_service/routes.py",
                      "textRange":{
-                        "startLine":696,
-                        "endLine":696,
+                        "startLine":717,
+                        "endLine":717,
                         "startOffset":26,
                         "endOffset":82
                      },
@@ -152,11 +84,11 @@
          "severity":"CRITICAL",
          "component":"VytasKer_Fintegrate:services/customer_service/routes.py",
          "project":"VytasKer_Fintegrate",
-         "line":132,
+         "line":136,
          "hash":"b511aac35c30ac4ef5632cdbd5e425a1",
          "textRange":{
-            "startLine":132,
-            "endLine":132,
+            "startLine":136,
+            "endLine":136,
             "startOffset":22,
             "endOffset":70
          },
@@ -166,8 +98,8 @@
                   {
                      "component":"VytasKer_Fintegrate:services/customer_service/routes.py",
                      "textRange":{
-                        "startLine":539,
-                        "endLine":539,
+                        "startLine":567,
+                        "endLine":567,
                         "startOffset":22,
                         "endOffset":70
                      },
@@ -180,8 +112,8 @@
                   {
                      "component":"VytasKer_Fintegrate:services/customer_service/routes.py",
                      "textRange":{
-                        "startLine":704,
-                        "endLine":704,
+                        "startLine":725,
+                        "endLine":725,
                         "startOffset":22,
                         "endOffset":70
                      },
@@ -220,11 +152,11 @@
          "severity":"CRITICAL",
          "component":"VytasKer_Fintegrate:services/customer_service/routes.py",
          "project":"VytasKer_Fintegrate",
-         "line":1585,
+         "line":1516,
          "hash":"31d6b9ea45dcd3002305d5dee5b14ea3",
          "textRange":{
-            "startLine":1585,
-            "endLine":1585,
+            "startLine":1516,
+            "endLine":1516,
             "startOffset":4,
             "endOffset":27
          },
@@ -234,8 +166,8 @@
                   {
                      "component":"VytasKer_Fintegrate:services/customer_service/routes.py",
                      "textRange":{
-                        "startLine":1617,
-                        "endLine":1617,
+                        "startLine":1548,
+                        "endLine":1548,
                         "startOffset":8,
                         "endOffset":10
                      },
@@ -248,8 +180,8 @@
                   {
                      "component":"VytasKer_Fintegrate:services/customer_service/routes.py",
                      "textRange":{
-                        "startLine":1620,
-                        "endLine":1620,
+                        "startLine":1551,
+                        "endLine":1551,
                         "startOffset":16,
                         "endOffset":18
                      },
@@ -262,78 +194,8 @@
                   {
                      "component":"VytasKer_Fintegrate:services/customer_service/routes.py",
                      "textRange":{
-                        "startLine":1622,
-                        "endLine":1622,
-                        "startOffset":16,
-                        "endOffset":20
-                     },
-                     "msg":"+1"
-                  }
-               ]
-            },
-            {
-               "locations":[
-                  {
-                     "component":"VytasKer_Fintegrate:services/customer_service/routes.py",
-                     "textRange":{
-                        "startLine":1625,
-                        "endLine":1625,
-                        "startOffset":12,
-                        "endOffset":18
-                     },
-                     "msg":"+2 (incl 1 for nesting)"
-                  }
-               ]
-            },
-            {
-               "locations":[
-                  {
-                     "component":"VytasKer_Fintegrate:services/customer_service/routes.py",
-                     "textRange":{
-                        "startLine":1634,
-                        "endLine":1634,
-                        "startOffset":8,
-                        "endOffset":12
-                     },
-                     "msg":"+1"
-                  }
-               ]
-            },
-            {
-               "locations":[
-                  {
-                     "component":"VytasKer_Fintegrate:services/customer_service/routes.py",
-                     "textRange":{
-                        "startLine":1638,
-                        "endLine":1638,
-                        "startOffset":8,
-                        "endOffset":10
-                     },
-                     "msg":"+1"
-                  }
-               ]
-            },
-            {
-               "locations":[
-                  {
-                     "component":"VytasKer_Fintegrate:services/customer_service/routes.py",
-                     "textRange":{
-                        "startLine":1641,
-                        "endLine":1641,
-                        "startOffset":16,
-                        "endOffset":18
-                     },
-                     "msg":"+2 (incl 1 for nesting)"
-                  }
-               ]
-            },
-            {
-               "locations":[
-                  {
-                     "component":"VytasKer_Fintegrate:services/customer_service/routes.py",
-                     "textRange":{
-                        "startLine":1643,
-                        "endLine":1643,
+                        "startLine":1553,
+                        "endLine":1553,
                         "startOffset":16,
                         "endOffset":20
                      },
@@ -346,8 +208,8 @@
                   {
                      "component":"VytasKer_Fintegrate:services/customer_service/routes.py",
                      "textRange":{
-                        "startLine":1646,
-                        "endLine":1646,
+                        "startLine":1556,
+                        "endLine":1556,
                         "startOffset":12,
                         "endOffset":18
                      },
@@ -360,8 +222,8 @@
                   {
                      "component":"VytasKer_Fintegrate:services/customer_service/routes.py",
                      "textRange":{
-                        "startLine":1655,
-                        "endLine":1655,
+                        "startLine":1562,
+                        "endLine":1562,
                         "startOffset":8,
                         "endOffset":12
                      },
@@ -374,8 +236,8 @@
                   {
                      "component":"VytasKer_Fintegrate:services/customer_service/routes.py",
                      "textRange":{
-                        "startLine":1660,
-                        "endLine":1660,
+                        "startLine":1566,
+                        "endLine":1566,
                         "startOffset":8,
                         "endOffset":10
                      },
@@ -388,8 +250,64 @@
                   {
                      "component":"VytasKer_Fintegrate:services/customer_service/routes.py",
                      "textRange":{
-                        "startLine":1671,
-                        "endLine":1671,
+                        "startLine":1569,
+                        "endLine":1569,
+                        "startOffset":16,
+                        "endOffset":18
+                     },
+                     "msg":"+2 (incl 1 for nesting)"
+                  }
+               ]
+            },
+            {
+               "locations":[
+                  {
+                     "component":"VytasKer_Fintegrate:services/customer_service/routes.py",
+                     "textRange":{
+                        "startLine":1571,
+                        "endLine":1571,
+                        "startOffset":16,
+                        "endOffset":20
+                     },
+                     "msg":"+1"
+                  }
+               ]
+            },
+            {
+               "locations":[
+                  {
+                     "component":"VytasKer_Fintegrate:services/customer_service/routes.py",
+                     "textRange":{
+                        "startLine":1574,
+                        "endLine":1574,
+                        "startOffset":12,
+                        "endOffset":18
+                     },
+                     "msg":"+2 (incl 1 for nesting)"
+                  }
+               ]
+            },
+            {
+               "locations":[
+                  {
+                     "component":"VytasKer_Fintegrate:services/customer_service/routes.py",
+                     "textRange":{
+                        "startLine":1580,
+                        "endLine":1580,
+                        "startOffset":8,
+                        "endOffset":12
+                     },
+                     "msg":"+1"
+                  }
+               ]
+            },
+            {
+               "locations":[
+                  {
+                     "component":"VytasKer_Fintegrate:services/customer_service/routes.py",
+                     "textRange":{
+                        "startLine":1585,
+                        "endLine":1585,
                         "startOffset":8,
                         "endOffset":10
                      },
@@ -402,8 +320,8 @@
                   {
                      "component":"VytasKer_Fintegrate:services/customer_service/routes.py",
                      "textRange":{
-                        "startLine":1682,
-                        "endLine":1682,
+                        "startLine":1593,
+                        "endLine":1593,
                         "startOffset":8,
                         "endOffset":10
                      },
@@ -416,8 +334,8 @@
                   {
                      "component":"VytasKer_Fintegrate:services/customer_service/routes.py",
                      "textRange":{
-                        "startLine":1692,
-                        "endLine":1692,
+                        "startLine":1601,
+                        "endLine":1601,
                         "startOffset":8,
                         "endOffset":10
                      },
@@ -430,8 +348,22 @@
                   {
                      "component":"VytasKer_Fintegrate:services/customer_service/routes.py",
                      "textRange":{
-                        "startLine":1692,
-                        "endLine":1692,
+                        "startLine":1605,
+                        "endLine":1605,
+                        "startOffset":8,
+                        "endOffset":10
+                     },
+                     "msg":"+1"
+                  }
+               ]
+            },
+            {
+               "locations":[
+                  {
+                     "component":"VytasKer_Fintegrate:services/customer_service/routes.py",
+                     "textRange":{
+                        "startLine":1605,
+                        "endLine":1605,
                         "startOffset":25,
                         "endOffset":27
                      },
@@ -444,8 +376,8 @@
                   {
                      "component":"VytasKer_Fintegrate:services/customer_service/routes.py",
                      "textRange":{
-                        "startLine":1714,
-                        "endLine":1714,
+                        "startLine":1623,
+                        "endLine":1623,
                         "startOffset":57,
                         "endOffset":59
                      },
@@ -458,8 +390,8 @@
                   {
                      "component":"VytasKer_Fintegrate:services/customer_service/routes.py",
                      "textRange":{
-                        "startLine":1729,
-                        "endLine":1729,
+                        "startLine":1638,
+                        "endLine":1638,
                         "startOffset":4,
                         "endOffset":10
                      },
@@ -499,11 +431,11 @@
          "severity":"CRITICAL",
          "component":"VytasKer_Fintegrate:services/customer_service/routes.py",
          "project":"VytasKer_Fintegrate",
-         "line":736,
+         "line":754,
          "hash":"fcf0932ef457d6423b9be830d77cf4ba",
          "textRange":{
-            "startLine":736,
-            "endLine":736,
+            "startLine":754,
+            "endLine":754,
             "startOffset":4,
             "endOffset":25
          },
@@ -513,8 +445,8 @@
                   {
                      "component":"VytasKer_Fintegrate:services/customer_service/routes.py",
                      "textRange":{
-                        "startLine":760,
-                        "endLine":760,
+                        "startLine":775,
+                        "endLine":775,
                         "startOffset":8,
                         "endOffset":10
                      },
@@ -527,8 +459,8 @@
                   {
                      "component":"VytasKer_Fintegrate:services/customer_service/routes.py",
                      "textRange":{
-                        "startLine":763,
-                        "endLine":763,
+                        "startLine":778,
+                        "endLine":778,
                         "startOffset":8,
                         "endOffset":10
                      },
@@ -541,8 +473,8 @@
                   {
                      "component":"VytasKer_Fintegrate:services/customer_service/routes.py",
                      "textRange":{
-                        "startLine":780,
-                        "endLine":780,
+                        "startLine":795,
+                        "endLine":795,
                         "startOffset":8,
                         "endOffset":10
                      },
@@ -555,8 +487,8 @@
                   {
                      "component":"VytasKer_Fintegrate:services/customer_service/routes.py",
                      "textRange":{
-                        "startLine":796,
-                        "endLine":796,
+                        "startLine":808,
+                        "endLine":808,
                         "startOffset":8,
                         "endOffset":11
                      },
@@ -569,8 +501,8 @@
                   {
                      "component":"VytasKer_Fintegrate:services/customer_service/routes.py",
                      "textRange":{
-                        "startLine":798,
-                        "endLine":798,
+                        "startLine":810,
+                        "endLine":810,
                         "startOffset":12,
                         "endOffset":14
                      },
@@ -583,8 +515,8 @@
                   {
                      "component":"VytasKer_Fintegrate:services/customer_service/routes.py",
                      "textRange":{
-                        "startLine":798,
-                        "endLine":798,
+                        "startLine":810,
+                        "endLine":810,
                         "startOffset":44,
                         "endOffset":47
                      },
@@ -597,8 +529,8 @@
                   {
                      "component":"VytasKer_Fintegrate:services/customer_service/routes.py",
                      "textRange":{
-                        "startLine":815,
-                        "endLine":815,
+                        "startLine":827,
+                        "endLine":827,
                         "startOffset":16,
                         "endOffset":18
                      },
@@ -611,8 +543,8 @@
                   {
                      "component":"VytasKer_Fintegrate:services/customer_service/routes.py",
                      "textRange":{
-                        "startLine":817,
-                        "endLine":817,
+                        "startLine":829,
+                        "endLine":829,
                         "startOffset":50,
                         "endOffset":52
                      },
@@ -625,8 +557,8 @@
                   {
                      "component":"VytasKer_Fintegrate:services/customer_service/routes.py",
                      "textRange":{
-                        "startLine":830,
-                        "endLine":830,
+                        "startLine":842,
+                        "endLine":842,
                         "startOffset":16,
                         "endOffset":18
                      },
@@ -639,8 +571,8 @@
                   {
                      "component":"VytasKer_Fintegrate:services/customer_service/routes.py",
                      "textRange":{
-                        "startLine":838,
-                        "endLine":838,
+                        "startLine":850,
+                        "endLine":850,
                         "startOffset":16,
                         "endOffset":20
                      },
@@ -653,8 +585,8 @@
                   {
                      "component":"VytasKer_Fintegrate:services/customer_service/routes.py",
                      "textRange":{
-                        "startLine":841,
-                        "endLine":841,
+                        "startLine":853,
+                        "endLine":853,
                         "startOffset":12,
                         "endOffset":18
                      },
@@ -667,8 +599,8 @@
                   {
                      "component":"VytasKer_Fintegrate:services/customer_service/routes.py",
                      "textRange":{
-                        "startLine":845,
-                        "endLine":845,
+                        "startLine":857,
+                        "endLine":857,
                         "startOffset":12,
                         "endOffset":14
                      },
@@ -681,8 +613,8 @@
                   {
                      "component":"VytasKer_Fintegrate:services/customer_service/routes.py",
                      "textRange":{
-                        "startLine":851,
-                        "endLine":851,
+                        "startLine":863,
+                        "endLine":863,
                         "startOffset":16,
                         "endOffset":18
                      },
@@ -695,8 +627,8 @@
                   {
                      "component":"VytasKer_Fintegrate:services/customer_service/routes.py",
                      "textRange":{
-                        "startLine":885,
-                        "endLine":885,
+                        "startLine":895,
+                        "endLine":895,
                         "startOffset":4,
                         "endOffset":10
                      },
@@ -736,11 +668,11 @@
          "severity":"CRITICAL",
          "component":"VytasKer_Fintegrate:services/customer_service/routes.py",
          "project":"VytasKer_Fintegrate",
-         "line":1074,
+         "line":1060,
          "hash":"9e450cbee28f134cba9ec7238b9b18b0",
          "textRange":{
-            "startLine":1074,
-            "endLine":1074,
+            "startLine":1060,
+            "endLine":1060,
             "startOffset":4,
             "endOffset":28
          },
@@ -750,8 +682,8 @@
                   {
                      "component":"VytasKer_Fintegrate:services/customer_service/routes.py",
                      "textRange":{
-                        "startLine":1099,
-                        "endLine":1099,
+                        "startLine":1085,
+                        "endLine":1085,
                         "startOffset":8,
                         "endOffset":10
                      },
@@ -764,8 +696,8 @@
                   {
                      "component":"VytasKer_Fintegrate:services/customer_service/routes.py",
                      "textRange":{
-                        "startLine":1102,
-                        "endLine":1102,
+                        "startLine":1088,
+                        "endLine":1088,
                         "startOffset":8,
                         "endOffset":10
                      },
@@ -778,8 +710,8 @@
                   {
                      "component":"VytasKer_Fintegrate:services/customer_service/routes.py",
                      "textRange":{
-                        "startLine":1119,
-                        "endLine":1119,
+                        "startLine":1105,
+                        "endLine":1105,
                         "startOffset":8,
                         "endOffset":10
                      },
@@ -792,8 +724,8 @@
                   {
                      "component":"VytasKer_Fintegrate:services/customer_service/routes.py",
                      "textRange":{
-                        "startLine":1135,
-                        "endLine":1135,
+                        "startLine":1118,
+                        "endLine":1118,
                         "startOffset":8,
                         "endOffset":11
                      },
@@ -806,8 +738,8 @@
                   {
                      "component":"VytasKer_Fintegrate:services/customer_service/routes.py",
                      "textRange":{
-                        "startLine":1137,
-                        "endLine":1137,
+                        "startLine":1120,
+                        "endLine":1120,
                         "startOffset":12,
                         "endOffset":14
                      },
@@ -820,8 +752,8 @@
                   {
                      "component":"VytasKer_Fintegrate:services/customer_service/routes.py",
                      "textRange":{
-                        "startLine":1137,
-                        "endLine":1137,
+                        "startLine":1120,
+                        "endLine":1120,
                         "startOffset":47,
                         "endOffset":50
                      },
@@ -834,8 +766,8 @@
                   {
                      "component":"VytasKer_Fintegrate:services/customer_service/routes.py",
                      "textRange":{
-                        "startLine":1154,
-                        "endLine":1154,
+                        "startLine":1137,
+                        "endLine":1137,
                         "startOffset":16,
                         "endOffset":18
                      },
@@ -848,8 +780,8 @@
                   {
                      "component":"VytasKer_Fintegrate:services/customer_service/routes.py",
                      "textRange":{
-                        "startLine":1156,
-                        "endLine":1156,
+                        "startLine":1139,
+                        "endLine":1139,
                         "startOffset":50,
                         "endOffset":52
                      },
@@ -862,8 +794,8 @@
                   {
                      "component":"VytasKer_Fintegrate:services/customer_service/routes.py",
                      "textRange":{
-                        "startLine":1169,
-                        "endLine":1169,
+                        "startLine":1152,
+                        "endLine":1152,
                         "startOffset":16,
                         "endOffset":18
                      },
@@ -876,8 +808,8 @@
                   {
                      "component":"VytasKer_Fintegrate:services/customer_service/routes.py",
                      "textRange":{
-                        "startLine":1175,
-                        "endLine":1175,
+                        "startLine":1158,
+                        "endLine":1158,
                         "startOffset":16,
                         "endOffset":20
                      },
@@ -890,8 +822,8 @@
                   {
                      "component":"VytasKer_Fintegrate:services/customer_service/routes.py",
                      "textRange":{
-                        "startLine":1178,
-                        "endLine":1178,
+                        "startLine":1161,
+                        "endLine":1161,
                         "startOffset":12,
                         "endOffset":18
                      },
@@ -904,8 +836,8 @@
                   {
                      "component":"VytasKer_Fintegrate:services/customer_service/routes.py",
                      "textRange":{
-                        "startLine":1182,
-                        "endLine":1182,
+                        "startLine":1165,
+                        "endLine":1165,
                         "startOffset":12,
                         "endOffset":14
                      },
@@ -918,8 +850,8 @@
                   {
                      "component":"VytasKer_Fintegrate:services/customer_service/routes.py",
                      "textRange":{
-                        "startLine":1188,
-                        "endLine":1188,
+                        "startLine":1171,
+                        "endLine":1171,
                         "startOffset":16,
                         "endOffset":18
                      },
@@ -932,8 +864,8 @@
                   {
                      "component":"VytasKer_Fintegrate:services/customer_service/routes.py",
                      "textRange":{
-                        "startLine":1222,
-                        "endLine":1222,
+                        "startLine":1203,
+                        "endLine":1203,
                         "startOffset":4,
                         "endOffset":10
                      },
@@ -1242,16 +1174,6 @@
          "qualifier":"TRK",
          "name":"Fintegrate",
          "longName":"Fintegrate"
-      },
-      {
-         "organization":"vytasker",
-         "key":"VytasKer_Fintegrate:services/customer_service/crud.py",
-         "uuid":"AZqD4iGUn5B4R_p_CqSJ",
-         "enabled":true,
-         "qualifier":"FIL",
-         "name":"crud.py",
-         "longName":"services/customer_service/crud.py",
-         "path":"services/customer_service/crud.py"
       },
       {
          "organization":"vytasker",

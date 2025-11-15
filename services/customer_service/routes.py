@@ -8,6 +8,13 @@ import os
 from datetime import datetime, timedelta
 from services.customer_service.database import get_db
 from services.shared.utils import utcnow
+from services.customer_service import metrics
+from services.customer_service.metrics import (
+    record_customer_operation,
+    record_event_publish,
+    record_rabbitmq_failure,
+    MetricsTimer,
+)
 from services.customer_service.schemas import (
     CustomerCreate,
     CustomerCreateResponse,
@@ -104,15 +111,18 @@ def create_customer(
             )
             publisher = get_event_publisher()
             if publisher:
-                publish_success = publisher.publish_event(
-                    event_id=event.event_id,  # Use the event_id from DB
-                    event_type="customer_creation",
-                    customer_id=db_customer.customer_id,
-                    name=db_customer.name,
-                    status=db_customer.status,
-                    created_at=event.created_at,
-                    consumer_name=consumer.name,
-                )
+                with MetricsTimer(
+                    metrics.event_publish_duration_seconds, event_type="customer_creation", consumer=consumer.name
+                ):
+                    publish_success = publisher.publish_event(
+                        event_id=event.event_id,  # Use the event_id from DB
+                        event_type="customer_creation",
+                        customer_id=db_customer.customer_id,
+                        name=db_customer.name,
+                        status=db_customer.status,
+                        created_at=event.created_at,
+                        consumer_name=consumer.name,
+                    )
 
                 if publish_success:
                     # Update event record - successfully published
@@ -182,9 +192,11 @@ def get_customer(
     Requires: X-API-Key header with valid consumer API key
     """
     print(f"[{INSTANCE_ID}] Processing GET /customer/data - customer_id: {customer_id}")
+    print(f"[DEBUG] GET authenticated consumer: id={consumer.consumer_id}, name={consumer.name}")
     try:
         # SECURITY: Filter by consumer_id to prevent cross-consumer data access
         db_customer = crud.get_customer(db, customer_id, consumer.consumer_id)
+        print(f"[DEBUG] Query result: db_customer={db_customer}")
         if db_customer is None:
             error_resp = error_response(
                 status.HTTP_404_NOT_FOUND,

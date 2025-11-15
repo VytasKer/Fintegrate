@@ -99,6 +99,11 @@ services:
       # HTTP router configuration (same name for both instances)
       - "traefik.http.routers.customer-service.rule=PathPrefix(`/customer`) || PathPrefix(`/events`) || PathPrefix(`/consumer`) || PathPrefix(`/admin`) || PathPrefix(`/analytics`)"
       - "traefik.http.routers.customer-service.entrypoints=web"
+      # Separate router for metrics (no rate limit, public access)
+      - "traefik.http.routers.customer-metrics.rule=Path(`/metrics`) || Path(`/metrics/`)"
+      - "traefik.http.routers.customer-metrics.entrypoints=web"
+      - "traefik.http.routers.customer-metrics.service=customer-service"
+      - "traefik.http.routers.customer-metrics.priority=100"
       # IP-based rate limiting middleware (test-friendly values)
       - "traefik.http.middlewares.ratelimit-ip.ratelimit.average=100"
       - "traefik.http.middlewares.ratelimit-ip.ratelimit.period=1m"
@@ -149,6 +154,11 @@ services:
       # HTTP router configuration (IDENTICAL to instance 1)
       - "traefik.http.routers.customer-service.rule=PathPrefix(`/customer`) || PathPrefix(`/events`) || PathPrefix(`/consumer`) || PathPrefix(`/admin`) || PathPrefix(`/analytics`)"
       - "traefik.http.routers.customer-service.entrypoints=web"
+      # Separate router for metrics (no rate limit, public access)
+      - "traefik.http.routers.customer-metrics.rule=Path(`/metrics`) || Path(`/metrics/`)"
+      - "traefik.http.routers.customer-metrics.entrypoints=web"
+      - "traefik.http.routers.customer-metrics.service=customer-service"
+      - "traefik.http.routers.customer-metrics.priority=100"
       # IP-based rate limiting middleware (test-friendly values)
       - "traefik.http.middlewares.ratelimit-ip.ratelimit.average=100"
       - "traefik.http.middlewares.ratelimit-ip.ratelimit.period=1m"
