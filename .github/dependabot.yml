@@ -1,0 +1,111 @@
+# Dependabot configuration for automated dependency updates
+# Scans for security vulnerabilities and outdated packages
+# Documentation: https://docs.github.com/en/code-security/dependabot
+
+version: 2
+updates:
+  # Python dependencies - Customer Service
+  - package-ecosystem: "pip"
+    directory: "/services/customer_service"
+    schedule:
+      interval: "weekly"  # Check every Monday
+      day: "monday"
+      time: "09:00"
+      timezone: "Europe/London"
+    open-pull-requests-limit: 5  # Max 5 PRs at once (prevent spam)
+    labels:
+      - "dependencies"
+      - "security"
+    commit-message:
+      prefix: "chore(deps)"  # Conventional commits format
+    # Security-first strategy
+    versioning-strategy: increase  # Prefer minor/patch over major updates
+    allow:
+      - dependency-type: "all"  # Include both direct and transitive deps
+    # ignore:
+      # Example: Pin specific versions if needed
+      # - dependency-name: "fastapi"
+      #   versions: ["0.100.x"]  # Don't update to 0.100.x
+
+  # Python dependencies - Event Consumer
+  - package-ecosystem: "pip"
+    directory: "/services/event_consumer"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "09:00"
+      timezone: "Europe/London"
+    open-pull-requests-limit: 5
+    labels:
+      - "dependencies"
+      - "security"
+    commit-message:
+      prefix: "chore(deps)"
+
+  # Python dependencies - Shared
+  - package-ecosystem: "pip"
+    directory: "/services/shared"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "09:00"
+      timezone: "Europe/London"
+    open-pull-requests-limit: 3
+    reviewers:
+      - "VytasKer"
+    labels:
+      - "dependencies"
+      - "security"
+    commit-message:
+      prefix: "chore(deps)"
+
+  # Test dependencies
+  - package-ecosystem: "pip"
+    directory: "/tests"
+    schedule:
+      interval: "monthly"  # Test deps less critical
+      day: "monday"
+      time: "09:00"
+      timezone: "Europe/London"
+    open-pull-requests-limit: 3
+    reviewers:
+      - "VytasKer"
+    labels:
+      - "dependencies"
+      - "testing"
+    commit-message:
+      prefix: "chore(test-deps)"
+
+  # GitHub Actions workflows
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "monthly"
+      day: "monday"
+      time: "09:00"
+      timezone: "Europe/London"
+    open-pull-requests-limit: 3
+    reviewers:
+      - "VytasKer"
+    labels:
+      - "dependencies"
+      - "ci"
+    commit-message:
+      prefix: "chore(ci)"
+
+  # Docker base images (if using Dockerfile with FROM statements)
+  - package-ecosystem: "docker"
+    directory: "/docker"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "09:00"
+      timezone: "Europe/London"
+    open-pull-requests-limit: 3
+    reviewers:
+      - "VytasKer"
+    labels:
+      - "dependencies"
+      - "docker"
+    commit-message:
+      prefix: "chore(docker)"

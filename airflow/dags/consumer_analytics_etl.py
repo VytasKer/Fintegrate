@@ -8,7 +8,7 @@ Pattern: Extract → Transform → Load with incremental watermark tracking
 
 Email Alerts: Sends failure notifications to vytaske11@gmail.com
 """
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from airflow import DAG
 from airflow.operators.python import PythonOperator
 import psycopg2
@@ -348,7 +348,7 @@ def load_consumer_analytics(**context):
             cursor = conn.cursor()
             
             # Update watermark with current timestamp to mark successful run
-            current_timestamp = datetime.utcnow()
+            current_timestamp = datetime.now(timezone.utc)
             update_watermark(
                 cursor=cursor,
                 job_name='consumer_analytics_daily',
@@ -378,7 +378,7 @@ def load_consumer_analytics(**context):
         conn = get_db_connection()
         cursor = conn.cursor()
         
-        snapshot_timestamp = datetime.utcnow()
+        snapshot_timestamp = datetime.now(timezone.utc)
         inserted_count = 0
         duplicate_count = 0
         
@@ -578,7 +578,7 @@ def load_consumer_analytics(**context):
                 update_watermark(
                     cursor=cursor,
                     job_name='consumer_analytics_daily',
-                    new_timestamp=datetime.utcnow(),
+                    new_timestamp=datetime.now(timezone.utc),
                     status='failed',
                     records_processed=0,
                     metadata={'error': str(e), 'error_type': 'IntegrityError'}
@@ -600,7 +600,7 @@ def load_consumer_analytics(**context):
                 update_watermark(
                     cursor=cursor,
                     job_name='consumer_analytics_daily',
-                    new_timestamp=datetime.utcnow(),
+                    new_timestamp=datetime.now(timezone.utc),
                     status='failed',
                     records_processed=0,
                     metadata={'error': str(e), 'error_type': 'ValueError'}
@@ -621,7 +621,7 @@ def load_consumer_analytics(**context):
                 update_watermark(
                     cursor=cursor,
                     job_name='consumer_analytics_daily',
-                    new_timestamp=datetime.utcnow(),
+                    new_timestamp=datetime.now(timezone.utc),
                     status='failed',
                     records_processed=0,
                     metadata={'error': str(e), 'error_type': type(e).__name__}

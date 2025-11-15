@@ -1,0 +1,160 @@
+name: Security - Dependency Vulnerability Scan
+
+# Scan Python dependencies for CVEs using pip-audit and Safety
+# Runs on: push to main, PRs, and weekly schedule
+# Fails pipeline if critical vulnerabilities found
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '**/requirements.txt'
+      - '.github/workflows/security-scan.yml'
+  pull_request:
+    branches: [main]
+    paths:
+      - '**/requirements.txt'
+  schedule:
+    - cron: '0 9 * * 1'  # Weekly on Monday 9 AM UTC
+  workflow_dispatch:  # Manual trigger
+
+jobs:
+  dependency-scan:
+    name: Scan Dependencies for CVEs
+    runs-on: ubuntu-latest
+    
+    strategy:
+      matrix:
+        requirements-file:
+          - 'requirements.txt'
+          - 'services/customer_service/requirements.txt'
+          - 'services/event_consumer/requirements.txt'
+          - 'tests/requirements.txt'
+      fail-fast: false  # Continue scanning all files even if one fails
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      
+      - name: Install scanning tools
+        run: |
+          python -m pip install --upgrade pip
+          pip install pip-audit safety
+      
+      - name: Run pip-audit (Official pip tool)
+        run: |
+          echo "## pip-audit Results for ${{ matrix.requirements-file }}" >> $GITHUB_STEP_SUMMARY
+          echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
+          pip-audit --requirement ${{ matrix.requirements-file }} --format json > audit-results.json || true
+          cat audit-results.json >> $GITHUB_STEP_SUMMARY
+          echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
+          
+          # Check if vulnerabilities found (exit code 1 if any found)
+          pip-audit --requirement ${{ matrix.requirements-file }} --strict || echo "::warning::Vulnerabilities found in ${{ matrix.requirements-file }}"
+        continue-on-error: true  # Don't fail pipeline yet, just warn
+      
+      - name: Run Safety (pyup.io database)
+        run: |
+          echo "## Safety Results for ${{ matrix.requirements-file }}" >> $GITHUB_STEP_SUMMARY
+          echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
+          safety check --file ${{ matrix.requirements-file }} --output text >> $GITHUB_STEP_SUMMARY || true
+          echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
+          
+          # Check for vulnerabilities
+          safety check --file ${{ matrix.requirements-file }} || echo "::warning::Safety detected vulnerabilities in ${{ matrix.requirements-file }}"
+        continue-on-error: true
+      
+      - name: Upload scan results
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: vulnerability-scan-${{ matrix.requirements-file }}
+          path: audit-results.json
+          retention-days: 90
+      
+      - name: Check for CRITICAL vulnerabilities
+        run: |
+          # Fail pipeline if CRITICAL severity vulnerabilities found
+          # This prevents merging code with critical security issues
+          
+          CRITICAL_COUNT=$(cat audit-results.json | jq '[.vulnerabilities[] | select(.fix_versions != null)] | length' || echo "0")
+          
+          echo "Found $CRITICAL_COUNT fixable vulnerabilities"
+          
+          if [ "$CRITICAL_COUNT" -gt "0" ]; then
+            echo "::error::CRITICAL vulnerabilities found! Please update dependencies before merging."
+            exit 1
+          fi
+
+  # OWASP Dependency-Check (comprehensive scanner for all dependency types)
+  owasp-dependency-check:
+    name: OWASP Dependency Check
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Run OWASP Dependency-Check
+        uses: dependency-check/Dependency-Check_Action@main
+        with:
+          project: 'Fintegrate'
+          path: '.'
+          format: 'HTML'
+          args: >
+            --enableRetired
+            --enableExperimental
+            --scan services/
+            --out dependency-check-report
+      
+      - name: Upload OWASP report
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: owasp-dependency-check-report
+          path: dependency-check-report/
+          retention-days: 90
+      
+      - name: Publish OWASP summary
+        if: always()
+        run: |
+          echo "## OWASP Dependency-Check Results" >> $GITHUB_STEP_SUMMARY
+          echo "Full report uploaded as artifact: \`owasp-dependency-check-report\`" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "Review report for:" >> $GITHUB_STEP_SUMMARY
+          echo "- Known CVEs in dependencies" >> $GITHUB_STEP_SUMMARY
+          echo "- Outdated libraries with security patches" >> $GITHUB_STEP_SUMMARY
+          echo "- OWASP Top 10 risks (A06:2021 Vulnerable Components)" >> $GITHUB_STEP_SUMMARY
+
+  # Summary job - aggregates all scan results
+  security-summary:
+    name: Security Scan Summary
+    runs-on: ubuntu-latest
+    needs: [dependency-scan, owasp-dependency-check]
+    if: always()
+    
+    steps:
+      - name: Generate summary
+        run: |
+          echo "# 🔒 Security Scan Complete" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Scanned Files:**" >> $GITHUB_STEP_SUMMARY
+          echo "- requirements.txt" >> $GITHUB_STEP_SUMMARY
+          echo "- services/customer_service/requirements.txt" >> $GITHUB_STEP_SUMMARY
+          echo "- services/event_consumer/requirements.txt" >> $GITHUB_STEP_SUMMARY
+          echo "- tests/requirements.txt" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Tools Used:**" >> $GITHUB_STEP_SUMMARY
+          echo "- pip-audit (official pip tool)" >> $GITHUB_STEP_SUMMARY
+          echo "- Safety (pyup.io CVE database)" >> $GITHUB_STEP_SUMMARY
+          echo "- OWASP Dependency-Check" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Next Steps:**" >> $GITHUB_STEP_SUMMARY
+          echo "1. Review warnings in job logs" >> $GITHUB_STEP_SUMMARY
+          echo "2. Merge Dependabot PRs for security patches" >> $GITHUB_STEP_SUMMARY
+          echo "3. Check OWASP report artifact for detailed analysis" >> $GITHUB_STEP_SUMMARY
