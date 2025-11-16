@@ -1,0 +1,11 @@
+# Namespace for Fintegrate monitoring components
+# Isolates Prometheus, Grafana, and exporters from application services
+
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: fintegrate-monitoring
+  labels:
+    app.kubernetes.io/name: fintegrate
+    app.kubernetes.io/component: monitoring
+    environment: development

@@ -1,0 +1,107 @@
+# ConfigMap for Prometheus main configuration
+# Contains scrape configs and global settings
+
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: prometheus-config
+  namespace: fintegrate-monitoring
+  labels:
+    app.kubernetes.io/name: prometheus
+    app.kubernetes.io/component: config
+data:
+  prometheus.yml: |
+    global:
+      scrape_interval: 15s
+      evaluation_interval: 15s
+      external_labels:
+        cluster: 'fintegrate-minikube'
+        environment: 'development'
+
+    alerting:
+      alertmanagers:
+        - static_configs:
+            - targets: []
+
+    rule_files:
+      - '/etc/prometheus/prometheus-rules.yml'
+
+    scrape_configs:
+      # Prometheus self-monitoring
+      - job_name: 'prometheus'
+        static_configs:
+          - targets:
+              - 'localhost:9090'
+            labels:
+              service: 'prometheus'
+              instance_type: 'monitoring'
+
+      # Kubernetes pod discovery (for future service deployment)
+      - job_name: 'kubernetes-pods'
+        kubernetes_sd_configs:
+          - role: pod
+        relabel_configs:
+          # Only scrape pods with annotation prometheus.io/scrape=true
+          - source_labels: [__meta_kubernetes_pod_annotation_prometheus_io_scrape]
+            action: keep
+            regex: true
+          # Use custom port if prometheus.io/port annotation exists
+          - source_labels: [__meta_kubernetes_pod_annotation_prometheus_io_port, __meta_kubernetes_pod_ip]
+            action: replace
+            regex: ([^:]+)(?::\d+)?;(\d+)
+            replacement: $1:$2
+            target_label: __address__
+          # Set job label from pod annotation or default to pod name
+          - source_labels: [__meta_kubernetes_pod_annotation_prometheus_io_job]
+            action: replace
+            target_label: job
+          # Include pod namespace and name as labels
+          - source_labels: [__meta_kubernetes_namespace]
+            target_label: kubernetes_namespace
+          - source_labels: [__meta_kubernetes_pod_name]
+            target_label: kubernetes_pod_name
+
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: prometheus-rules
+  namespace: fintegrate-monitoring
+  labels:
+    app.kubernetes.io/name: prometheus
+    app.kubernetes.io/component: rules
+data:
+  prometheus-rules.yml: |
+    groups:
+      # API Health Alerts
+      - name: api_health
+        interval: 30s
+        rules:
+          - alert: HighAPIErrorRate
+            expr: |
+              (
+                sum(rate(customer_service_http_requests_total{status_code=~"4..|5.."}[5m]))
+                /
+                sum(rate(customer_service_http_requests_total[5m]))
+              ) > 0.05
+            for: 2m
+            labels:
+              severity: warning
+              component: api
+            annotations:
+              summary: "High API error rate detected"
+              description: "{{ $value | humanizePercentage }} of API requests are failing (threshold: 5%)"
+
+          - alert: SlowAPIResponses
+            expr: |
+              histogram_quantile(0.95,
+                rate(customer_service_http_request_duration_seconds_bucket[5m])
+              ) > 1.0
+            for: 3m
+            labels:
+              severity: warning
+              component: api
+            annotations:
+              summary: "API response times degraded"
+              description: "95th percentile latency is {{ $value }}s (threshold: 1s)"

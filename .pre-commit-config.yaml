@@ -44,7 +44,7 @@ repos:
     hooks:
       - id: check-yaml
         name: Check YAML Syntax
-        entry: python -c "import sys, yaml; [yaml.safe_load(open(f)) for f in sys.argv[1:]]"
+        entry: python -c "import sys, yaml; [list(yaml.safe_load_all(open(f))) for f in sys.argv[1:]]"
         language: system
         types: [yaml]
 

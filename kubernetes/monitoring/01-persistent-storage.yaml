@@ -1,0 +1,37 @@
+# PersistentVolumeClaim for Prometheus metric storage
+# Ensures metrics persist across pod restarts
+# Storage class 'standard' uses Minikube's default provisioner
+
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: prometheus-data
+  namespace: fintegrate-monitoring
+  labels:
+    app.kubernetes.io/name: prometheus
+    app.kubernetes.io/component: storage
+spec:
+  accessModes:
+    - ReadWriteOnce  # Single pod can mount for read/write
+  storageClassName: standard  # Minikube default storage class
+  resources:
+    requests:
+      storage: 10Gi  # 10GB for metric retention
+
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: grafana-data
+  namespace: fintegrate-monitoring
+  labels:
+    app.kubernetes.io/name: grafana
+    app.kubernetes.io/component: storage
+spec:
+  accessModes:
+    - ReadWriteOnce
+  storageClassName: standard
+  resources:
+    requests:
+      storage: 5Gi  # 5GB for dashboard/datasource configs

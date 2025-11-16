@@ -17,14 +17,10 @@ class PrometheusMiddleware(BaseHTTPMiddleware):
         # Import here to avoid circular dependencies
         from services.customer_service.metrics import http_requests_total, http_request_duration_seconds
 
-        # Extract consumer from request state (set by verify_api_key middleware)
-        consumer_obj = getattr(request.state, "consumer", None)
-        consumer_label = consumer_obj.name if consumer_obj and hasattr(consumer_obj, "name") else "unauthenticated"
-
         # Track request timing
         start_time = time.time()
 
-        # Process request
+        # Process request (auth happens inside call_next via route dependencies)
         response: Response = await call_next(request)
 
         # Calculate duration
@@ -33,7 +29,11 @@ class PrometheusMiddleware(BaseHTTPMiddleware):
         # Extract endpoint path (remove query params)
         path = request.url.path
 
-        # Record metrics
+        # Re-check consumer AFTER request processing (auth dependency has now executed)
+        consumer_obj = getattr(request.state, "consumer", None)
+        consumer_label = consumer_obj.name if consumer_obj and hasattr(consumer_obj, "name") else "unauthenticated"
+
+        # Record metrics with correct consumer label
         http_requests_total.labels(
             method=request.method, endpoint=path, status_code=response.status_code, consumer=consumer_label
         ).inc()

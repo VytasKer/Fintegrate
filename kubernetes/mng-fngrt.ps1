@@ -97,6 +97,8 @@ function Start-Cluster {
     Write-Host "  RabbitMQ UI:     http://localhost:15673" -ForegroundColor White
     Write-Host "  RabbitMQ AMQP:   localhost:5673" -ForegroundColor White
     Write-Host "  PostgreSQL:      localhost:5436" -ForegroundColor White
+    Write-Host "  Prometheus (K8s):http://localhost:9091" -ForegroundColor White
+    Write-Host "  Grafana (K8s):   http://localhost:3001 (admin/fintegrate_admin)" -ForegroundColor White
 }
 
 function Start-FullDeploy {
@@ -241,7 +243,7 @@ function Start-FullDeploy {
     Start-PortForwards
     Write-Host "  Port-forwards established" -ForegroundColor Green
     
-    Write-Host "`n========================================" -ForegroundColor Green
+    Write-Host "========================================" -ForegroundColor Green
     Write-Host "  Deployment Complete!" -ForegroundColor Green
     Write-Host "========================================" -ForegroundColor Green
     Write-Host ""
@@ -251,6 +253,8 @@ function Start-FullDeploy {
     Write-Host "  RabbitMQ UI:     http://localhost:15673" -ForegroundColor White
     Write-Host "  RabbitMQ AMQP:   localhost:5673" -ForegroundColor White
     Write-Host "  PostgreSQL:      localhost:5436" -ForegroundColor White
+    Write-Host "  Prometheus (K8s):http://localhost:9091" -ForegroundColor White
+    Write-Host "  Grafana (K8s):   http://localhost:3001 (admin/fintegrate_admin)" -ForegroundColor White
 }
 
 function Restart-Services {
@@ -410,7 +414,7 @@ function Stop-AllPortForwards {
     Get-Job | Where-Object { $_.Command -like "*kubectl port-forward*" } | Remove-Job 2>&1 | Out-Null
     
     # Kill any processes holding the ports (stale kubectl processes)
-    $ports = @("8001", "5436", "15673", "5673")
+    $ports = @("8001", "5436", "15673", "5673", "9091", "3001")
     foreach ($port in $ports) {
         $connections = netstat -ano | Select-String ":$port\s" -ErrorAction SilentlyContinue
         if ($connections) {
@@ -429,19 +433,27 @@ function Stop-AllPortForwards {
 function Start-PortForwards {
     # Start port-forwards in background (direct to services, no Traefik)
     Write-Host "  Starting port-forwards..." -ForegroundColor Gray
+    
+    # Application services
     Start-Job -ScriptBlock { kubectl port-forward svc/customer-service 8001:8000 } | Out-Null
     Start-Job -ScriptBlock { kubectl port-forward svc/postgres 5436:5432 } | Out-Null
     Start-Job -ScriptBlock { kubectl port-forward svc/rabbitmq 15673:15672 } | Out-Null
     Start-Job -ScriptBlock { kubectl port-forward svc/rabbitmq 5673:5672 } | Out-Null
     
+    # Monitoring services (different ports from Docker Compose to avoid conflicts)
+    # Docker: Prometheus 9090, Grafana 3000
+    # K8s:    Prometheus 9091, Grafana 3001
+    Start-Job -ScriptBlock { kubectl port-forward -n fintegrate-monitoring svc/prometheus 9091:9090 } | Out-Null
+    Start-Job -ScriptBlock { kubectl port-forward -n fintegrate-monitoring svc/grafana 3001:3000 } | Out-Null
+    
     Start-Sleep -Seconds 3
     
     # Verify port-forwards are running
     $runningForwards = (Get-Job | Where-Object { $_.Command -like "*kubectl port-forward*" -and $_.State -eq "Running" } | Measure-Object).Count
-    if ($runningForwards -eq 4) {
-        Write-Host "  Port-forwards active: $runningForwards/4" -ForegroundColor Green
+    if ($runningForwards -eq 6) {
+        Write-Host "  Port-forwards active: $runningForwards/6" -ForegroundColor Green
     } else {
-        Write-Host "  Warning: Only $runningForwards/4 port-forwards active" -ForegroundColor Yellow
+        Write-Host "  Warning: Only $runningForwards/6 port-forwards active" -ForegroundColor Yellow
         Write-Host "  Check failed jobs: Get-Job | Where-Object { `$_.State -eq 'Failed' } | Receive-Job" -ForegroundColor Gray
     }
 }
@@ -508,6 +520,8 @@ function Show-ClusterStatus {
         Write-Host "  RabbitMQ UI:     http://localhost:15673" -ForegroundColor Green
         Write-Host "  RabbitMQ AMQP:   localhost:5673" -ForegroundColor Green
         Write-Host "  PostgreSQL:      localhost:5436" -ForegroundColor Green
+        Write-Host "  Prometheus (K8s):http://localhost:9091" -ForegroundColor Green
+        Write-Host "  Grafana (K8s):   http://localhost:3001 (admin/fintegrate_admin)" -ForegroundColor Green
     } else {
         Write-Host "  Port-forwards not running - URLs unavailable" -ForegroundColor Red
         Write-Host "  Run option 1 or 3 to start port-forwards" -ForegroundColor Yellow
