@@ -1,0 +1,172 @@
+# Prometheus Alerting Rules for Fintegrate Integration Platform
+# Defines thresholds for critical integration health metrics
+
+groups:
+  # API Health Alerts
+  - name: api_health
+    interval: 30s
+    rules:
+      # High error rate (>5% of requests returning 4xx/5xx)
+      - alert: HighAPIErrorRate
+        expr: |
+          (
+            sum(rate(customer_service_http_requests_total{status_code=~"4..|5.."}[5m]))
+            /
+            sum(rate(customer_service_http_requests_total[5m]))
+          ) > 0.05
+        for: 2m
+        labels:
+          severity: warning
+          component: api
+        annotations:
+          summary: "High API error rate detected"
+          description: "{{ $value | humanizePercentage }} of API requests are failing (threshold: 5%)"
+          
+      # Slow API response times (p95 latency >1s)
+      - alert: SlowAPIResponses
+        expr: |
+          histogram_quantile(0.95,
+            rate(customer_service_http_request_duration_seconds_bucket[5m])
+          ) > 1.0
+        for: 3m
+        labels:
+          severity: warning
+          component: api
+        annotations:
+          summary: "API response times degraded"
+          description: "95th percentile latency is {{ $value }}s (threshold: 1s)"
+
+      # API service down (no metrics scraped)
+      - alert: APIServiceDown
+        expr: up{job="customer-service"} == 0
+        for: 1m
+        labels:
+          severity: critical
+          component: api
+        annotations:
+          summary: "Customer service instance is down"
+          description: "{{ $labels.instance }} has been unreachable for 1 minute"
+
+  # Event Processing Alerts
+  - name: event_processing
+    interval: 30s
+    rules:
+      # High event publish failure rate (>10%)
+      - alert: HighEventPublishFailureRate
+        expr: |
+          (
+            sum(rate(customer_service_event_publish_total{status="failure"}[5m]))
+            /
+            sum(rate(customer_service_event_publish_total[5m]))
+          ) > 0.10
+        for: 2m
+        labels:
+          severity: critical
+          component: events
+        annotations:
+          summary: "High event publish failure rate"
+          description: "{{ $value | humanizePercentage }} of events failing to publish (threshold: 10%)"
+
+      # Event outbox growing (pending events >100)
+      - alert: EventOutboxGrowing
+        expr: customer_service_event_outbox_pending > 100
+        for: 5m
+        labels:
+          severity: warning
+          component: events
+        annotations:
+          summary: "Event outbox backlog growing"
+          description: "{{ $value }} events pending publish for consumer {{ $labels.consumer }}"
+
+      # RabbitMQ publish failures increasing
+      - alert: RabbitMQPublishFailures
+        expr: rate(customer_service_rabbitmq_publish_failures_total[5m]) > 0.5
+        for: 2m
+        labels:
+          severity: warning
+          component: rabbitmq
+        annotations:
+          summary: "RabbitMQ publish failures detected"
+          description: "{{ $value }} failures/sec for event type {{ $labels.event_type }}"
+
+  # RabbitMQ Health Alerts
+  - name: rabbitmq_health
+    interval: 30s
+    rules:
+      # RabbitMQ service down
+      - alert: RabbitMQDown
+        expr: up{job="rabbitmq"} == 0
+        for: 1m
+        labels:
+          severity: critical
+          component: rabbitmq
+        annotations:
+          summary: "RabbitMQ is down"
+          description: "RabbitMQ exporter unreachable for 1 minute"
+
+      # High queue depth (>1000 messages)
+      - alert: HighQueueDepth
+        expr: rabbitmq_queue_messages > 1000
+        for: 5m
+        labels:
+          severity: warning
+          component: rabbitmq
+        annotations:
+          summary: "RabbitMQ queue depth high"
+          description: "Queue {{ $labels.queue }} has {{ $value }} messages pending"
+
+      # No consumers on queue
+      - alert: QueueNoConsumers
+        expr: rabbitmq_queue_consumers == 0 and rabbitmq_queue_messages > 0
+        for: 3m
+        labels:
+          severity: warning
+          component: rabbitmq
+        annotations:
+          summary: "Queue has no consumers"
+          description: "Queue {{ $labels.queue }} has messages but no active consumers"
+
+  # Database Health Alerts
+  - name: database_health
+    interval: 30s
+    rules:
+      # PostgreSQL service down
+      - alert: PostgreSQLDown
+        expr: up{job="postgresql"} == 0
+        for: 1m
+        labels:
+          severity: critical
+          component: database
+        annotations:
+          summary: "PostgreSQL is down"
+          description: "PostgreSQL exporter unreachable for 1 minute"
+
+      # High database connection usage (>80% of max)
+      - alert: HighDatabaseConnections
+        expr: |
+          (
+            pg_stat_database_numbackends
+            /
+            pg_settings_max_connections
+          ) > 0.80
+        for: 3m
+        labels:
+          severity: warning
+          component: database
+        annotations:
+          summary: "Database connection pool near limit"
+          description: "{{ $value | humanizePercentage }} of max connections in use"
+
+      # Slow database queries (if we add query duration metric later)
+      - alert: SlowDatabaseQueries
+        expr: |
+          histogram_quantile(0.95,
+            rate(customer_service_db_query_duration_seconds_bucket[5m])
+          ) > 0.5
+        for: 3m
+        labels:
+          severity: warning
+          component: database
+        annotations:
+          summary: "Database queries running slow"
+          description: "95th percentile query time is {{ $value }}s (threshold: 0.5s)"
