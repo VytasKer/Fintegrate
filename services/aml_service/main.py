@@ -261,6 +261,17 @@ def process_customer_creation(ch, method, properties, body):
                 metadata={"checked_at": utcnow().isoformat() + "Z", "source": "AML_SERVICE", "fail_open": True},
             )
 
+            # Publish customer_status_change event
+            publish_event_to_rabbitmq(
+                channel=ch,
+                event_id=event.event_id,
+                event_type="customer_status_change",
+                customer_id=customer_id,
+                customer_name=customer_name,
+                status="ACTIVE",
+                consumer_name=consumer_name,
+            )
+
             # Publish customer_creation event (approved)
             publish_event_to_rabbitmq(
                 channel=ch,
@@ -343,6 +354,17 @@ def process_customer_creation(ch, method, properties, body):
                     "checked_at": utcnow().isoformat() + "Z",
                     "source": "AML_SERVICE",
                 },
+            )
+
+            # Publish customer_status_change event
+            publish_event_to_rabbitmq(
+                channel=ch,
+                event_id=event.event_id,
+                event_type="customer_status_change",
+                customer_id=customer_id,
+                customer_name=customer_name,
+                status="ACTIVE",
+                consumer_name=consumer_name,
             )
 
             # Publish customer_creation event (as originally intended)

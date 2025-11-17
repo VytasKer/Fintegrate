@@ -68,7 +68,7 @@ def callback(ch, method, properties, body):
             confirmation_payload = {
                 "event_id": event_id,
                 "status": processing_status,
-                "received_at": utcnow().isoformat() + "Z",
+                "received_at": utcnow().isoformat(),
                 "failure_reason": failure_reason,
                 "consumer_name": CONSUMER_NAME,
             }
@@ -105,7 +105,7 @@ def callback(ch, method, properties, body):
                 confirmation_payload = {
                     "event_id": event_id,
                     "status": processing_status,
-                    "received_at": utcnow().isoformat() + "Z",
+                    "received_at": utcnow().isoformat(),
                     "failure_reason": failure_reason,
                     "consumer_name": CONSUMER_NAME,
                 }
@@ -138,7 +138,7 @@ def callback(ch, method, properties, body):
                     confirmation_payload = {
                         "event_id": event_id,
                         "status": processing_status,
-                        "received_at": utcnow().isoformat() + "Z",
+                        "received_at": utcnow().isoformat(),
                         "failure_reason": f"Max retries exceeded: {failure_reason}",
                         "consumer_name": CONSUMER_NAME,
                     }
