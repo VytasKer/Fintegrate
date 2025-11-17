@@ -1,0 +1,39 @@
+# Dockerfile for AML Service
+# Handles sanctions screening for new customers
+
+FROM python:3.11-slim
+
+WORKDIR /app
+
+# Install system dependencies
+RUN apt-get update && apt-get install -y \
+    gcc \
+    && rm -rf /var/lib/apt/lists/*
+
+# Copy shared modules and AML service
+COPY services/shared /app/services/shared
+COPY services/aml_service /app/services/aml_service
+COPY services/customer_service/models.py /app/services/customer_service/models.py
+COPY services/customer_service/database.py /app/services/customer_service/database.py
+COPY services/customer_service/config.py /app/services/customer_service/config.py
+COPY services/customer_service/__init__.py /app/services/customer_service/__init__.py
+
+# Install Python dependencies
+RUN pip install --no-cache-dir \
+    pika==1.3.2 \
+    sqlalchemy==2.0.23 \
+    psycopg2-binary==2.9.9 \
+    requests==2.31.0
+
+# Install AML service requirements (includes pydantic-settings)
+RUN pip install --no-cache-dir -r services/aml_service/requirements.txt
+
+# Create directory for sanctions data
+RUN mkdir -p /app/data/sanctions
+
+# Set environment variables
+ENV PYTHONUNBUFFERED=1
+ENV PYTHONPATH=/app
+
+# Run AML service
+CMD ["python", "-m", "services.aml_service.main"]

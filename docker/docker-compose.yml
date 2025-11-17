@@ -255,6 +255,36 @@ services:
           cpus: '0.25'
           memory: 128M
 
+  # AML Service (Anti-Money Laundering / Sanctions Screening)
+  aml_service:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile.aml_service
+    container_name: fintegrate-aml-service
+    environment:
+      DATABASE_URL: postgresql://fintegrate_user:fintegrate_pass@postgres:5432/fintegrate_db
+      RABBITMQ_HOST: rabbitmq
+      RABBITMQ_PORT: 5672
+      RABBITMQ_USER: fintegrate_user
+      RABBITMQ_PASS: fintegrate_pass
+      SANCTIONS_DATA_DIR: /app/data/sanctions
+    depends_on:
+      - postgres
+      - rabbitmq
+    networks:
+      - fintegrate-network
+    volumes:
+      - sanctions_data:/app/data/sanctions
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 512M
+        reservations:
+          cpus: '0.5'
+          memory: 256M
+
   postgres:
     image: postgres:15-alpine
     container_name: fintegrate-postgres
@@ -501,6 +531,7 @@ volumes:
   airflow_logs:
   prometheus_data:
   grafana_data:
+  sanctions_data:
 
 networks:
   fintegrate-network:

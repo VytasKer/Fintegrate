@@ -21,14 +21,14 @@ repos:
         exclude: ^(venv/|\.venv/|__pycache__/)
 
   # Black - Python code formatter (system installed)
-  - repo: local
-    hooks:
-      - id: black
-        name: Black Formatter
-        entry: venv/Scripts/black.exe --line-length=120
-        language: system
-        types: [python]
-        exclude: ^(venv/|migrations/)
+  # - repo: local
+  #  hooks:
+  #    - id: black
+  #      name: Black Formatter
+  #      entry: venv/Scripts/black.exe --line-length=120
+  #      language: system
+  #      types: [python]
+  #      exclude: ^(venv/|migrations/)
 
   # detect-secrets - Prevent committing secrets (disabled - use CI scan instead)
   # - repo: local

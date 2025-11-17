@@ -3,10 +3,12 @@ from fastapi.responses import JSONResponse
 from fastapi.exceptions import RequestValidationError
 from sqlalchemy.orm import Session
 from uuid import UUID
+from typing import Optional
 import uuid
 import os
 from datetime import datetime, timedelta
 from services.customer_service.database import get_db
+from services.customer_service.models import Customer, Consumer
 from services.shared.utils import utcnow
 from services.customer_service import metrics
 from services.customer_service.metrics import (
@@ -58,6 +60,31 @@ router = APIRouter()
 
 # Get instance ID from environment (for load balancing verification)
 INSTANCE_ID = os.getenv("INSTANCE_ID", "unknown")
+
+
+def validate_customer_status_for_operation(customer: Customer, operation: str) -> Optional[dict]:
+    """
+    Validate customer status allows the requested operation.
+    Returns error response dict if blocked, None if allowed.
+
+    Args:
+        customer: Customer object to validate
+        operation: Operation name (for logging)
+
+    Returns:
+        Error response dict if validation fails, None if allowed
+    """
+    from services.customer_service.constants import CUSTOMER_STATUS_BLOCKED, CUSTOMER_STATUS_PENDING_AML
+
+    if customer.status == CUSTOMER_STATUS_BLOCKED:
+        # Vague error message for security (don't reveal customer is sanctioned)
+        return error_response(status.HTTP_403_FORBIDDEN, "Customer access restricted. Contact administrator.")
+
+    if customer.status == CUSTOMER_STATUS_PENDING_AML:
+        # Customer still being verified
+        return error_response(status.HTTP_409_CONFLICT, "Customer verification in progress. Please try again later.")
+
+    return None  # Validation passed
 
 
 @router.post("/customer/data", response_model=CustomerCreateStandardResponse, status_code=status.HTTP_201_CREATED)
@@ -122,6 +149,7 @@ def create_customer(
                         status=db_customer.status,
                         created_at=event.created_at,
                         consumer_name=consumer.name,
+                        consumer_id=consumer.consumer_id,  # Pass consumer_id for AML service
                     )
 
                 if publish_success:
@@ -214,6 +242,11 @@ def get_customer(
             )
 
             return JSONResponse(status_code=status.HTTP_404_NOT_FOUND, content=error_resp)
+
+        # Validate customer status allows this operation
+        status_error = validate_customer_status_for_operation(db_customer, "get_customer")
+        if status_error:
+            return JSONResponse(status_code=status_error["detail"]["status_code"], content=status_error)
 
         # SECURITY: Get customer tags with consumer_id validation
         customer_tags = crud.get_customer_tags(db, customer_id, consumer.consumer_id)
@@ -497,6 +530,15 @@ def delete_customer(
 
             return JSONResponse(status_code=status.HTTP_404_NOT_FOUND, content=error_resp)
 
+        # Validate customer status allows deletion (block PENDING_AML, allow INACTIVE and BLOCKED)
+        from services.customer_service.constants import CUSTOMER_STATUS_PENDING_AML
+
+        if db_customer.status == CUSTOMER_STATUS_PENDING_AML:
+            error_resp = error_response(
+                status.HTTP_409_CONFLICT, "Cannot delete customer while verification is in progress."
+            )
+            return JSONResponse(status_code=status.HTTP_409_CONFLICT, content=error_resp)
+
         # Step 2: SECURITY - Capture snapshot with consumer_id validation
         customer_tags = crud.get_customer_tags(db, customer_id, consumer.consumer_id)
 
@@ -652,6 +694,15 @@ def change_customer_status(
             )
 
             return JSONResponse(status_code=status.HTTP_404_NOT_FOUND, content=error_resp)
+
+        # Validate customer status allows this operation (consumers cannot change BLOCKED or PENDING_AML)
+        from services.customer_service.constants import CUSTOMER_STATUS_BLOCKED, CUSTOMER_STATUS_PENDING_AML
+
+        if db_customer.status in [CUSTOMER_STATUS_BLOCKED, CUSTOMER_STATUS_PENDING_AML]:
+            error_resp = error_response(
+                status.HTTP_403_FORBIDDEN, "Customer status change restricted. Contact administrator."
+            )
+            return JSONResponse(status_code=status.HTTP_403_FORBIDDEN, content=error_resp)
 
         # Check if customer already has the requested status
         if db_customer.status == status_change.status:
@@ -1515,6 +1566,136 @@ def change_consumer_status_admin(
     except Exception as e:
         error_resp = error_response(
             status.HTTP_500_INTERNAL_SERVER_ERROR, f"Failed to change consumer status: {str(e)}"
+        )
+        return JSONResponse(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, content=error_resp)
+
+
+@router.patch(
+    "/admin/customer/{customer_id}/status",
+    response_model=CustomerStatusChangeStandardResponse,
+    status_code=status.HTTP_200_OK,
+)
+def change_customer_status_admin(
+    customer_id: UUID, status_change: CustomerStatusChange, request: Request, db: Session = Depends(get_db)
+):
+    """
+    Admin endpoint: Change customer status (including BLOCKED → ACTIVE unblock).
+    Bypasses consumer isolation for admin operations.
+
+    TODO: Add admin authentication middleware.
+
+    Args:
+        customer_id: UUID of customer
+        status_change: New status (must include customer_id and status)
+
+    Returns:
+        Standardized response with detail only
+    """
+    from services.customer_service.constants import CUSTOMER_STATUS_TRANSITIONS, EVENT_TYPE_CUSTOMER_STATUS_CHANGE
+
+    try:
+        # Validate customer_id matches request body
+        if status_change.customer_id != customer_id:
+            error_resp = error_response(
+                status.HTTP_400_BAD_REQUEST,
+                f"customer_id in URL ({customer_id}) does not match request body ({status_change.customer_id})",
+            )
+            return JSONResponse(status_code=status.HTTP_400_BAD_REQUEST, content=error_resp)
+
+        # Get customer WITHOUT consumer_id validation (admin access)
+        db_customer = db.query(Customer).filter(Customer.customer_id == customer_id).first()
+
+        if not db_customer:
+            error_resp = error_response(status.HTTP_404_NOT_FOUND, f"Customer {customer_id} not found")
+            return JSONResponse(status_code=status.HTTP_404_NOT_FOUND, content=error_resp)
+
+        # Check if customer already has the requested status
+        if db_customer.status == status_change.status:
+            error_resp = error_response(
+                status.HTTP_409_CONFLICT, f"Customer {customer_id} is already {status_change.status}"
+            )
+            return JSONResponse(status_code=status.HTTP_409_CONFLICT, content=error_resp)
+
+        # Validate status transition
+        old_status = db_customer.status
+        new_status = status_change.status
+
+        allowed_transitions = CUSTOMER_STATUS_TRANSITIONS.get(old_status, [])
+        if new_status not in allowed_transitions:
+            error_resp = error_response(
+                status.HTTP_400_BAD_REQUEST,
+                f"Invalid status transition: {old_status} → {new_status}. Allowed: {allowed_transitions}",
+            )
+            return JSONResponse(status_code=status.HTTP_400_BAD_REQUEST, content=error_resp)
+
+        # Update customer status (no consumer_id check - admin override)
+        db_customer.status = new_status
+        db.commit()
+        db.refresh(db_customer)
+
+        print(f"[ADMIN] Updated customer {customer_id} status: {old_status} → {new_status}")
+
+        # Create customer_status_change event
+        event = crud.create_customer_event(
+            db=db,
+            customer_id=customer_id,
+            event_type=EVENT_TYPE_CUSTOMER_STATUS_CHANGE,
+            source_service="PATCH: /admin/customer/{customer_id}/status",
+            payload={
+                "customer_id": str(customer_id),
+                "old_status": old_status,
+                "new_status": new_status,
+                "admin_action": True,
+            },
+            metadata={"changed_at": db_customer.updated_at.isoformat(), "source": "ADMIN"},
+            publish_status="pending",
+            published_at=None,
+            publish_try_count=1,
+            publish_last_tried_at=utcnow(),
+            publish_failure_reason=None,
+            consumer_id=db_customer.consumer_id,
+        )
+
+        # Try to publish to RabbitMQ
+        try:
+            publisher = get_event_publisher()
+            if publisher:
+                # Get consumer name for routing
+                consumer_obj = db.query(Consumer).filter(Consumer.consumer_id == db_customer.consumer_id).first()
+                consumer_name = consumer_obj.name if consumer_obj else "unknown"
+
+                publish_success = publisher.publish_event(
+                    event_id=event.event_id,
+                    event_type=EVENT_TYPE_CUSTOMER_STATUS_CHANGE,
+                    customer_id=customer_id,
+                    name=db_customer.name,
+                    status=new_status,
+                    created_at=event.created_at,
+                    consumer_name=consumer_name,
+                    consumer_id=db_customer.consumer_id,
+                )
+
+                if publish_success:
+                    event.publish_status = "published"
+                    event.published_at = utcnow()
+                    event.deliver_try_count = 1
+                    event.deliver_last_tried_at = utcnow()
+                else:
+                    event.publish_failure_reason = PUBLISH_ERROR_RABBITMQ_FALSE
+                db.commit()
+            else:
+                event.publish_failure_reason = PUBLISH_ERROR_PUBLISHER_NONE
+                db.commit()
+        except Exception as mq_error:
+            event.publish_failure_reason = f"{type(mq_error).__name__}: {str(mq_error)}"
+            db.commit()
+            print(f"[ADMIN] Event publish failed (non-blocking): {event.publish_failure_reason}")
+
+        return success_response({}, status.HTTP_200_OK)
+
+    except Exception as e:
+        error_resp = error_response(
+            status.HTTP_500_INTERNAL_SERVER_ERROR, f"Failed to change customer status: {str(e)}"
         )
         return JSONResponse(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, content=error_resp)
 
