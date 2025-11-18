@@ -242,10 +242,15 @@ def get_customer(
 
             return JSONResponse(status_code=status.HTTP_404_NOT_FOUND, content=error_resp)
 
-        # Validate customer status allows this operation
-        status_error = validate_customer_status_for_operation(db_customer, "get_customer")
-        if status_error:
-            return JSONResponse(status_code=status_error["detail"]["status_code"], content=status_error)
+        # Allow retrieval of customer data even if customer is BLOCKED.
+        # Keep blocking only for customers pending AML verification.
+        from services.customer_service.constants import CUSTOMER_STATUS_PENDING_AML
+
+        if db_customer.status == CUSTOMER_STATUS_PENDING_AML:
+            error_resp = error_response(
+                status.HTTP_409_CONFLICT, "Customer verification in progress. Please try again later."
+            )
+            return JSONResponse(status_code=status.HTTP_409_CONFLICT, content=error_resp)
 
         # SECURITY: Get customer tags with consumer_id validation
         customer_tags = crud.get_customer_tags(db, customer_id, consumer.consumer_id)

@@ -66,6 +66,9 @@ function Show-Menu {
     Write-Host "[10] Setup Git Hooks" -ForegroundColor Gray
     Write-Host "    Configure reminders for version updates" -ForegroundColor Gray
     Write-Host ""
+    Write-Host "[11] Dev: Rebuild local Docker images and optionally restart containers" -ForegroundColor Blue
+    Write-Host "    Build/retag images locally and restart selected docker-compose services (no git)" -ForegroundColor Gray
+    Write-Host ""
     Write-Host "[Q] Quit" -ForegroundColor White
     Write-Host ""
     Write-Host "========================================" -ForegroundColor Cyan
@@ -169,15 +172,14 @@ function Build-And-Tag-Images {
         return
     }
 
-    # Change into docker directory if it exists
-    $dockerDir = Join-Path (Get-Location) 'docker'
-    if (Test-Path $dockerDir) { Push-Location $dockerDir }
+    # Use repository root as build context so Dockerfiles can COPY files from services/
+    $repoRoot = (Get-Location).Path
 
     foreach ($repo in $buildMap.Keys) {
         $dockerfile = $buildMap[$repo]
         if ($choice -eq 'b' -or $choice -eq 'B') {
-            Write-Host "Building $repo using $dockerfile..." -ForegroundColor Yellow
-            $cmd = "docker build -f $dockerfile -t $($repo):$($version) -t $($repo):latest ."
+            Write-Host "Building $repo using docker/$dockerfile with context $repoRoot..." -ForegroundColor Yellow
+            $cmd = "docker build -f docker/$dockerfile -t $($repo):$($version) -t $($repo):latest $repoRoot"
             Write-Host $cmd -ForegroundColor DarkGray
             iex $cmd
             if ($LASTEXITCODE -ne 0) {
@@ -197,8 +199,6 @@ function Build-And-Tag-Images {
             }
         }
     }
-
-    if (Test-Path $dockerDir) { Pop-Location }
 
     # Optionally push images to a registry
     $pushNow = Read-Host "Push built/tagged images to a registry now? (y/N)"
@@ -459,6 +459,56 @@ function Main-Commit-Tag-Push {
     }
 }
 
+function Dev-Rebuild-Local {
+    # Interactive flow to rebuild images locally and restart containers without touching git
+    Write-Host "Dev: Rebuild local images (no git operations)" -ForegroundColor Cyan
+
+    $defaultTag = Read-Host "Temporary local image tag to use (default: dev)" -Default 'dev'
+    if (-not $defaultTag) { $defaultTag = 'dev' }
+
+    Write-Host "Building/retagging images with tag: $defaultTag" -ForegroundColor Gray
+    # Reuse Build-And-Tag-Images which will prompt build vs retag and optionally push
+    Build-And-Tag-Images $defaultTag
+
+    # After images are prepared, optionally restart docker-compose services
+    $useCompose = Read-Host "Do you use docker compose to run these services and want to recreate containers? (y/N)"
+    if ($useCompose -ne 'y' -and $useCompose -ne 'Y') {
+        Write-Host "Skipping container restart." -ForegroundColor Gray
+        return
+    }
+
+    $composeFileDefault = "docker\docker-compose.yml"
+    $composeFile = Read-Host "Path to docker-compose file (relative to repo root)" -Default $composeFileDefault
+    if (-not (Test-Path $composeFile)) {
+        Write-Host "Compose file not found: $composeFile" -ForegroundColor Red
+        return
+    }
+
+    Write-Host "Enter service names to recreate (comma separated), or 'all' to recreate all services:" -ForegroundColor Cyan
+    $svcInput = Read-Host "Services (e.g. customer_service,event_consumer) or all"
+    if ($svcInput -and $svcInput.Trim().ToLower() -ne 'all') {
+        $services = $svcInput -split ',' | ForEach-Object { $_.Trim() } | Where-Object { $_ }
+        if ($services.Count -eq 0) {
+            Write-Host "No services specified. Aborting restart." -ForegroundColor Yellow
+            return
+        }
+        # Recreate listed services using docker compose (no-deps to avoid restarting dependencies)
+        $svcArgs = $services -join ' '
+        Write-Host "Recreating services: $svcArgs using compose file $composeFile" -ForegroundColor Yellow
+        $cmd = "docker compose -f `"$composeFile`" up -d --no-deps --build $svcArgs"
+        Write-Host $cmd -ForegroundColor DarkGray
+        iex $cmd
+    } else {
+        # Recreate all services
+        Write-Host "Recreating all services from $composeFile (will rebuild images)" -ForegroundColor Yellow
+        $cmd = "docker compose -f `"$composeFile`" up -d --build"
+        Write-Host $cmd -ForegroundColor DarkGray
+        iex $cmd
+    }
+
+    Write-Host "Dev rebuild complete. Containers updated (volumes preserved)." -ForegroundColor Green
+}
+
 # Main loop
 while ($true) {
     Show-Menu
@@ -655,6 +705,12 @@ while ($true) {
         "10" {
             Write-Host "`n[Setup Git Hooks]" -ForegroundColor Gray
             Setup-GitHooks
+            Read-Host "`nPress Enter to continue"
+        }
+
+        "11" {
+            Write-Host "`n[Dev Rebuild Local Images]" -ForegroundColor Blue
+            Dev-Rebuild-Local
             Read-Host "`nPress Enter to continue"
         }
 

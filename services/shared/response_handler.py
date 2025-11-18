@@ -28,8 +28,9 @@ def create_detail(status_code: int, description: str = "Success") -> Dict[str, s
         501: "NOT_IMPLEMENTED",
     }
 
+    # Ensure status_code is returned as a string to satisfy Pydantic response model validation
     return {
-        "status_code": status_code,
+        "status_code": str(status_code),
         "status_name": status_names.get(status_code, "UNKNOWN"),
         "status_description": description,
     }
