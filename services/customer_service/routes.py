@@ -224,7 +224,6 @@ def get_customer(
     try:
         # SECURITY: Filter by consumer_id to prevent cross-consumer data access
         db_customer = crud.get_customer(db, customer_id, consumer.consumer_id)
-        print(f"[DEBUG] Query result: db_customer={db_customer}")
         if db_customer is None:
             error_resp = error_response(
                 status.HTTP_404_NOT_FOUND,
@@ -250,8 +249,8 @@ def get_customer(
 
         # SECURITY: Get customer tags with consumer_id validation
         customer_tags = crud.get_customer_tags(db, customer_id, consumer.consumer_id)
-        # Sort tags alphabetically by tag_key
-        tags_dict = {tag.tag_key: tag.tag_value for tag in sorted(customer_tags, key=lambda t: t.tag_key)}
+        # Create tags dict (order doesn't matter for JSON response)
+        tags_dict = {str(tag.tag_key): tag.tag_value for tag in customer_tags}
 
         response_data = CustomerResponse(
             customer_id=db_customer.customer_id,
