@@ -167,6 +167,15 @@ function Start-FullDeploy {
             return
         }
         
+        # Build AML service image
+        Write-Host "    - Building aml_service image..." -ForegroundColor Gray
+        docker build -f docker/Dockerfile.aml_service -t aml_service:latest . 2>&1 | Out-Null
+        if ($LASTEXITCODE -ne 0) {
+            Write-Host "    ERROR: Failed to build aml_service image" -ForegroundColor Red
+            return
+        }
+        Write-Host "    - AML service image built" -ForegroundColor Green
+
         Set-Location (Join-Path $projectRoot "kubernetes")
         Write-Host "  Images built successfully" -ForegroundColor Green
     } else {
@@ -205,15 +214,28 @@ function Start-FullDeploy {
     
     Write-Host "    - Services" -ForegroundColor Gray
     kubectl apply -f services/ 2>&1 | Out-Null
-    
     Write-Host "    - Deployments (applications)" -ForegroundColor Gray
     kubectl apply -f deployments/ 2>&1 | Out-Null
-    
     Write-Host "    - HPA (autoscaling)" -ForegroundColor Gray
     kubectl apply -f hpa/ 2>&1 | Out-Null
-    
     Write-Host "  Resources deployed" -ForegroundColor Green
-    
+
+    # Step 4b: Force rollout restart for all stateless deployments to use latest images
+    Write-Host "[4b/6] Forcing rollout restart for stateless deployments..." -ForegroundColor Yellow
+    $statelessDeployments = @(
+        "customer-service",
+        "event-consumer-default",
+        "event-consumer-swadia",
+        "event-consumer-test001",
+        "aml-service",
+        "traefik"
+    )
+    foreach ($dep in $statelessDeployments) {
+        Write-Host "    - Restarting deployment: $dep" -ForegroundColor Gray
+        kubectl rollout restart deployment/$dep 2>&1 | Out-Null
+    }
+    Write-Host "  Rollout restarts complete" -ForegroundColor Green
+
     # Step 5: Wait for pods
     Write-Host "[5/6] Waiting for pods to be ready..." -ForegroundColor Yellow
     $timeout = 90

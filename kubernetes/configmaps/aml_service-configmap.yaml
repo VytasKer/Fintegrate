@@ -1,0 +1,8 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: aml-service-config
+  labels:
+    app: aml-service
+# Add any non-secret config values here if needed
+# For now, environment variables are set in Deployment YAML

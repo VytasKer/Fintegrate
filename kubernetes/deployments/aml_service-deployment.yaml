@@ -1,0 +1,40 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: aml-service
+  labels:
+    app: aml-service
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: aml-service
+  template:
+    metadata:
+      labels:
+        app: aml-service
+    spec:
+      containers:
+        - name: aml-service
+          image: aml_service:latest # Replace with actual image tag if pushed to registry
+          imagePullPolicy: IfNotPresent
+          env:
+            - name: DATABASE_URL
+              value: "postgresql://fintegrate_user:fintegrate_pass@postgres:5432/fintegrate_db"
+            - name: RABBITMQ_HOST
+              value: "rabbitmq"
+            - name: RABBITMQ_PORT
+              value: "5672"
+            - name: RABBITMQ_USER
+              value: "fintegrate_user"
+            - name: RABBITMQ_PASS
+              value: "fintegrate_pass"
+            - name: SANCTIONS_DATA_DIR
+              value: "/app/data/sanctions"
+          volumeMounts:
+            - name: sanctions-data
+              mountPath: /app/data/sanctions
+      volumes:
+        - name: sanctions-data
+          persistentVolumeClaim:
+            claimName: sanctions-data-pvc

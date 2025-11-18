@@ -1,0 +1,13 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: aml-service
+spec:
+  selector:
+    app: aml-service
+  ports:
+    - protocol: TCP
+      port: 38000  # Expose on a unique NodePort for minikube
+      targetPort: 8000
+      nodePort: 38000
+  type: NodePort
