@@ -20,15 +20,40 @@ spec:
           imagePullPolicy: IfNotPresent
           env:
             - name: DATABASE_URL
-              value: "postgresql://fintegrate_user:fintegrate_pass@postgres:5432/fintegrate_db"
+              valueFrom:
+                secretKeyRef:
+                  name: postgres-secret
+                  key: DATABASE_URL
             - name: RABBITMQ_HOST
-              value: "rabbitmq"
+              valueFrom:
+                configMapKeyRef:
+                  name: app-config
+                  key: RABBITMQ_HOST
             - name: RABBITMQ_PORT
-              value: "5672"
+              valueFrom:
+                configMapKeyRef:
+                  name: app-config
+                  key: RABBITMQ_PORT
             - name: RABBITMQ_USER
-              value: "fintegrate_user"
+              valueFrom:
+                secretKeyRef:
+                  name: rabbitmq-secret
+                  key: RABBITMQ_USER
             - name: RABBITMQ_PASS
-              value: "fintegrate_pass"
+              valueFrom:
+                secretKeyRef:
+                  name: rabbitmq-secret
+                  key: RABBITMQ_PASS
+            - name: REDIS_HOST
+              valueFrom:
+                configMapKeyRef:
+                  name: app-config
+                  key: REDIS_HOST
+            - name: REDIS_PORT
+              valueFrom:
+                configMapKeyRef:
+                  name: app-config
+                  key: REDIS_PORT
             - name: SANCTIONS_DATA_DIR
               value: "/app/data/sanctions"
           volumeMounts:
