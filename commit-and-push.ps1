@@ -151,6 +151,80 @@ function Push-Tags {
     }
 }
 
+function Build-And-Tag-Images {
+    param([string]$version)
+
+    # Default image build map: repo -> Dockerfile (relative to repo root's docker/)
+    $buildMap = @{
+        'fintegrate-customer_service' = 'Dockerfile.customer_service'
+        'fintegrate-aml_service' = 'Dockerfile.aml_service'
+        'fintegrate-event_consumer' = 'Dockerfile.event_consumer'
+    }
+
+    Write-Host "Image version to use: $version" -ForegroundColor Cyan
+    $choice = Read-Host "Choose: [b]uild images, [r]etag existing :latest, [s]kip" -Default 's'
+
+    if ($choice -eq 's' -or $choice -eq 'S') {
+        Write-Host "Skipping image build/tag step" -ForegroundColor Gray
+        return
+    }
+
+    # Change into docker directory if it exists
+    $dockerDir = Join-Path (Get-Location) 'docker'
+    if (Test-Path $dockerDir) { Push-Location $dockerDir }
+
+    foreach ($repo in $buildMap.Keys) {
+        $dockerfile = $buildMap[$repo]
+        if ($choice -eq 'b' -or $choice -eq 'B') {
+            Write-Host "Building $repo using $dockerfile..." -ForegroundColor Yellow
+            $cmd = "docker build -f $dockerfile -t $($repo):$($version) -t $($repo):latest ."
+            Write-Host $cmd -ForegroundColor DarkGray
+            iex $cmd
+            if ($LASTEXITCODE -ne 0) {
+                Write-Host "ERROR: Build failed for $repo" -ForegroundColor Red
+            } else {
+                Write-Host "OK: Built $($repo):$($version)" -ForegroundColor Green
+            }
+        } else {
+            # retag latest -> version
+            Write-Host "Retagging $($repo):latest -> $($repo):$($version)" -ForegroundColor Yellow
+            $tagCmd = "docker tag $($repo):latest $($repo):$($version)"
+            iex $tagCmd
+            if ($LASTEXITCODE -ne 0) {
+                Write-Host "ERROR: Retag failed for $repo (ensure $repo:latest exists)" -ForegroundColor Red
+            } else {
+                Write-Host "OK: Tagged $($repo):$($version)" -ForegroundColor Green
+            }
+        }
+    }
+
+    if (Test-Path $dockerDir) { Pop-Location }
+
+    # Optionally push images to a registry
+    $pushNow = Read-Host "Push built/tagged images to a registry now? (y/N)"
+    if ($pushNow -eq 'y' -or $pushNow -eq 'Y') {
+        $registry = Read-Host "Registry prefix (e.g. myregistry.com/myorg) or leave empty for Docker Hub/localhost"
+        foreach ($repo in $buildMap.Keys) {
+            $src = "$($repo):$($version)"
+            if ($registry) {
+                $dst = "$registry/$($repo):$($version)"
+                Write-Host "Tagging $src -> $dst" -ForegroundColor Yellow
+                iex "docker tag $src $dst"
+                Write-Host "Pushing $dst..." -ForegroundColor Yellow
+                iex "docker push $dst"
+            } else {
+                Write-Host "Pushing $src to default registry..." -ForegroundColor Yellow
+                iex "docker push $src"
+            }
+            if ($LASTEXITCODE -ne 0) {
+                Write-Host "ERROR: Failed to push image for $repo" -ForegroundColor Red
+            } else {
+                Write-Host "OK: Pushed image for $repo" -ForegroundColor Green
+            }
+        }
+    }
+}
+
 function Update-Changelog {
     param([string]$version)
 
@@ -358,6 +432,13 @@ function Main-Commit-Tag-Push {
         if ($newVersion) {
             Set-Version $newVersion
             Update-Changelog $newVersion
+
+            # Offer to build/retag images with the new version
+            $doImages = Read-Host "Build or retag Docker images for version $newVersion now? (y/N)"
+            if ($doImages -eq 'y' -or $doImages -eq 'Y') {
+                Build-And-Tag-Images $newVersion
+            }
+
             if (Create-Tag $newVersion) {
                 $pushTagsNow = Read-Host "Push tags to remote now? (y/N)"
                 if ($pushTagsNow -eq 'y' -or $pushTagsNow -eq 'Y') { Push-Tags }

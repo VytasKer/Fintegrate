@@ -140,6 +140,158 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [$version] - $today
+
+### Added
+-
+
+### Changed
+-
+
+### Fixed
+-
+
+### Removed
+-
+
+### Security
+-
+
+## [Unreleased]
+
+## [$version] - $today
+
+### Added
+-
+
+### Changed
+-
+
+### Fixed
+-
+
+### Removed
+-
+
+### Security
+-
+
+## [Unreleased]
+
+## [$version] - $today
+
+### Added
+-
+
+### Changed
+-
+
+### Fixed
+-
+
+### Removed
+-
+
+### Security
+-
+
+## [Unreleased]
+
+## [$version] - $today
+
+### Added
+-
+
+### Changed
+-
+
+### Fixed
+-
+
+### Removed
+-
+
+### Security
+-
+
+## [Unreleased]
+
+## [$version] - $today
+
+### Added
+-
+
+### Changed
+-
+
+### Fixed
+-
+
+### Removed
+-
+
+### Security
+-
+
+## [Unreleased]
+
+## [$version] - $today
+
+### Added
+-
+
+### Changed
+-
+
+### Fixed
+-
+
+### Removed
+-
+
+### Security
+-
+
+## [Unreleased]
+
+## [$version] - $today
+
+### Added
+-
+
+### Changed
+-
+
+### Fixed
+-
+
+### Removed
+-
+
+### Security
+-
+
+## [Unreleased]
+
+## [$version] - $today
+
+### Added
+-
+
+### Changed
+-
+
+### Fixed
+-
+
+### Removed
+-
+
+### Security
+-
+
+## [Unreleased]
+
 ### Added
 - Initial project setup
 
@@ -154,6 +306,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Security
 -
+
 
 
 
