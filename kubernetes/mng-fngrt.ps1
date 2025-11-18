@@ -702,7 +702,16 @@ function Update-ServiceImages {
         return
     }
     
-    # Check if source code has changed since last build
+    # Read current version
+    $versionFile = Join-Path $PSScriptRoot "..\VERSION"
+    if (Test-Path $versionFile) {
+        $version = Get-Content $versionFile -Raw
+        $version = $version.Trim()
+        Write-Host "Building with version: $version" -ForegroundColor Cyan
+    } else {
+        Write-Host "WARNING: VERSION file not found, using v1.0.0" -ForegroundColor Yellow
+        $version = "1.0.0"
+    }
     $projectRoot = Split-Path $PSScriptRoot
     $servicesPath = Join-Path $projectRoot "services"
     $timestampFile = Join-Path $PSScriptRoot ".last_build_timestamp"
@@ -758,14 +767,14 @@ function Update-ServiceImages {
         Set-Location $projectRoot
         
         Write-Host "  - Building customer-service image..." -ForegroundColor Gray
-        docker build -f docker/Dockerfile.customer_service -t fintegrate-customer-service:v1.0 . 2>&1 | Out-Null
+        docker build -f docker/Dockerfile.customer_service -t "fintegrate-customer-service:v$version" . 2>&1 | Out-Null
         if ($LASTEXITCODE -ne 0) {
             Write-Host "    ERROR: Failed to build customer-service image" -ForegroundColor Red
             return
         }
         
         Write-Host "  - Building event-consumer image..." -ForegroundColor Gray
-        docker build -f docker/Dockerfile.event_consumer -t fintegrate-event-consumer:v1.0 . 2>&1 | Out-Null
+        docker build -f docker/Dockerfile.event_consumer -t "fintegrate-event-consumer:v$version" . 2>&1 | Out-Null
         if ($LASTEXITCODE -ne 0) {
             Write-Host "    ERROR: Failed to build event-consumer image" -ForegroundColor Red
             return
