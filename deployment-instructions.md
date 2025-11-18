@@ -51,7 +51,9 @@ fintegrate/
 │   ├── mng-fngrt.ps1        # Management script
 │   ├── deployments/
 │   └── .last_build_timestamp
-├── database/                 # SQL migrations
+├── tag-versioning.ps1       # Tag and version management script
+├── VERSION                   # Current version file
+├── CHANGELOG.md             # Version history
 └── requirements.txt
 ```
 
@@ -140,6 +142,22 @@ python -m pytest tests/ -v
 ```
 
 #### Phase 2: Update Version
+
+**Option A: Automated (Recommended)**
+
+```powershell
+# Run the versioning script
+.\tag-versioning.ps1
+
+# Select option 2 (Patch), 3 (Minor), or 4 (Major)
+# This will:
+# - Update VERSION file
+# - Update CHANGELOG.md
+# - Create Git tag
+# - Optionally push to remote
+```
+
+**Option B: Manual**
 
 ```powershell
 # 1. Update VERSION file
@@ -279,6 +297,7 @@ docker system prune -f
 - **VERSION file**: Contains current version (e.g., `1.0.0`)
 - **Git tags**: `git tag v1.0.0` for releases
 - **CHANGELOG.md**: Documents what changed
+- **tag-versioning.ps1**: Interactive script for version management
 
 **Image Tags**:
 - Development: `latest`
@@ -287,10 +306,31 @@ docker system prune -f
 **Process**:
 1. Make code changes
 2. Test locally
-3. Update VERSION file (patch: 1.0.0 → 1.0.1, minor: 1.0.0 → 1.1.0, major: 1.0.0 → 2.0.0)
-4. Update CHANGELOG.md
-5. Commit and tag: `git tag v1.0.1`
-6. Deploy with new version tag
+3. Run `.\tag-versioning.ps1` to create new version and tag
+4. Deploy with new version tag
+
+#### Versioning Script (`tag-versioning.ps1`)
+
+**Features**:
+- Interactive menu for all versioning operations
+- Automatic VERSION file management
+- CHANGELOG.md updates
+- Git tag creation and pushing
+- Git hooks for reminders
+
+**Available Options**:
+- Show current tags (local and remote)
+- Create patch/minor/major version tags
+- Create custom version tags
+- Push tags to remote
+- Update CHANGELOG.md
+- Show version history
+- Setup Git hooks for reminders
+
+**Git Hooks Setup**:
+Run option 9 in the script to configure automatic reminders:
+- Pre-commit: Checks for VERSION and CHANGELOG files
+- Pre-push: Reminds about tagging commits
 
 ## Troubleshooting
 
