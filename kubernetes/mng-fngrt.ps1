@@ -42,8 +42,8 @@ function Show-Menu {
     Write-Host "    (Use after first install or minikube delete)" -ForegroundColor Gray
     Write-Host ""
     Write-Host "[3] Restart Services Only" -ForegroundColor Cyan
-    Write-Host "    Restart application pods (customer-service, consumers)" -ForegroundColor Gray
-    Write-Host "    (Keeps cluster running, preserves databases)" -ForegroundColor Gray
+    Write-Host "    Restart application pods (customer-service, consumers, aml-service)" -ForegroundColor Gray
+    Write-Host "    (Keeps cluster running, preserves databases, no image rebuild)" -ForegroundColor Gray
     Write-Host ""
     Write-Host "[4] Stop Cluster (Safe)" -ForegroundColor Yellow
     Write-Host "    Stop Minikube but keep all data" -ForegroundColor Gray
@@ -64,6 +64,10 @@ function Show-Menu {
     Write-Host ""
     Write-Host "[9] Cluster Status" -ForegroundColor Cyan
     Write-Host "    View detailed cluster health and resource usage" -ForegroundColor Gray
+    Write-Host ""
+    Write-Host "[10] Update Service Images" -ForegroundColor Magenta
+    Write-Host "    Smart rebuild images only if source code changed" -ForegroundColor Gray
+    Write-Host "    (Checks file timestamps, updates and restarts services)" -ForegroundColor Gray
     Write-Host ""
     Write-Host "[Q] Quit" -ForegroundColor White
     Write-Host ""
@@ -139,10 +143,17 @@ function Start-FullDeploy {
     # Check if images exist
     $customerImage = docker images --format "{{.Repository}}:{{.Tag}}" | Select-String "fintegrate-customer-service:v1.0"
     $consumerImage = docker images --format "{{.Repository}}:{{.Tag}}" | Select-String "fintegrate-event-consumer:v1.0"
+    $amlImage = docker images --format "{{.Repository}}:{{.Tag}}" | Select-String "aml_service:latest"
     
-    if (-not $customerImage -or -not $consumerImage) {
-        Write-Host "  Images not found, building from project root..." -ForegroundColor Yellow
-        
+    if (-not $customerImage -or -not $consumerImage -or -not $amlImage) {
+        Write-Host "  Some images missing, building from project root..." -ForegroundColor Yellow
+        $buildImages = $true
+    } else {
+        Write-Host "  Images exist, rebuilding to ensure latest code..." -ForegroundColor Yellow
+        $buildImages = $true
+    }
+    
+    if ($buildImages) {
         $projectRoot = Split-Path $PSScriptRoot
         $dockerPath = Join-Path $projectRoot "docker"
         
@@ -178,8 +189,6 @@ function Start-FullDeploy {
 
         Set-Location (Join-Path $projectRoot "kubernetes")
         Write-Host "  Images built successfully" -ForegroundColor Green
-    } else {
-        Write-Host "  Images already exist in Minikube" -ForegroundColor Green
     }
     
     # Step 4: Deploy services
@@ -296,6 +305,9 @@ function Restart-Services {
     kubectl rollout restart deployment/event-consumer-swadia
     kubectl rollout restart deployment/event-consumer-test001
     
+    Write-Host "Restarting aml-service..." -ForegroundColor Yellow
+    kubectl rollout restart deployment/aml-service
+    
     Write-Host "`nWaiting for pods to be ready..." -ForegroundColor Gray
     kubectl wait --for=condition=ready pod -l app=customer-service --timeout=60s 2>&1 | Out-Null
     
@@ -384,9 +396,10 @@ function Show-Logs {
     Write-Host "[2] Event Consumer (default)" -ForegroundColor White
     Write-Host "[3] Event Consumer (swadia)" -ForegroundColor White
     Write-Host "[4] Event Consumer (test001)" -ForegroundColor White
-    Write-Host "[5] PostgreSQL" -ForegroundColor White
-    Write-Host "[6] RabbitMQ" -ForegroundColor White
-    Write-Host "[7] All pods (last 50 lines)" -ForegroundColor White
+    Write-Host "[5] AML Service" -ForegroundColor White
+    Write-Host "[6] PostgreSQL" -ForegroundColor White
+    Write-Host "[7] RabbitMQ" -ForegroundColor White
+    Write-Host "[8] All pods (last 50 lines)" -ForegroundColor White
     Write-Host ""
     $choice = Read-Host "Select service (Ctrl+C to exit logs)"
     
@@ -398,9 +411,10 @@ function Show-Logs {
         "2" { kubectl logs -l app=event-consumer,consumer=default --tail=100 -f }
         "3" { kubectl logs -l app=event-consumer,consumer=swadia --tail=100 -f }
         "4" { kubectl logs -l app=event-consumer,consumer=test001 --tail=100 -f }
-        "5" { kubectl logs -l app=postgres --tail=100 -f }
-        "6" { kubectl logs -l app=rabbitmq --tail=100 -f }
-        "7" { kubectl logs -l app --tail=50 --all-containers=true }
+        "5" { kubectl logs -l app=aml-service --tail=100 -f }
+        "6" { kubectl logs -l app=postgres --tail=100 -f }
+        "7" { kubectl logs -l app=rabbitmq --tail=100 -f }
+        "8" { kubectl logs -l app --tail=50 --all-containers=true }
         default { Write-Host "Invalid choice" -ForegroundColor Red; return }
     }
 }
@@ -679,6 +693,122 @@ function Run-Migrations {
     Write-Host "  4. Run via this menu (option 3)" -ForegroundColor Gray
 }
 
+function Update-ServiceImages {
+    Write-Host "`n[Updating Service Images...]" -ForegroundColor Magenta
+    
+    $status = minikube status --format='{{.Host}}' 2>&1
+    if ($status -notmatch "Running") {
+        Write-Host "ERROR: Cluster not running. Start cluster first (option 1)." -ForegroundColor Red
+        return
+    }
+    
+    # Check if source code has changed since last build
+    $projectRoot = Split-Path $PSScriptRoot
+    $servicesPath = Join-Path $projectRoot "services"
+    $timestampFile = Join-Path $PSScriptRoot ".last_build_timestamp"
+    
+    Write-Host "Checking for source code changes..." -ForegroundColor Yellow
+    
+    # Get latest modification time of Python files in services/
+    $latestSourceTime = Get-ChildItem "$servicesPath\**\*.py" -Recurse | 
+                        Sort-Object LastWriteTime -Descending | 
+                        Select-Object -First 1 -ExpandProperty LastWriteTime
+    
+    if (-not $latestSourceTime) {
+        Write-Host "ERROR: No Python files found in services/ directory" -ForegroundColor Red
+        return
+    }
+    
+    $lastBuildTime = $null
+    if (Test-Path $timestampFile) {
+        $lastBuildTime = Get-Content $timestampFile | Get-Date
+    }
+    
+    Write-Host "  Latest source modification: $($latestSourceTime.ToString('yyyy-MM-dd HH:mm:ss'))" -ForegroundColor Gray
+    if ($lastBuildTime) {
+        Write-Host "  Last build timestamp: $($lastBuildTime.ToString('yyyy-MM-dd HH:mm:ss'))" -ForegroundColor Gray
+    } else {
+        Write-Host "  Last build timestamp: Never" -ForegroundColor Gray
+    }
+    
+    $needsRebuild = $false
+    if (-not $lastBuildTime -or $latestSourceTime -gt $lastBuildTime) {
+        $needsRebuild = $true
+        Write-Host "  Source code has changed - rebuilding images..." -ForegroundColor Yellow
+    } else {
+        Write-Host "  Source code unchanged - skipping rebuild" -ForegroundColor Green
+    }
+    
+    if ($needsRebuild) {
+        # Switch to Minikube Docker context
+        Write-Host "Switching Docker context to Minikube..." -ForegroundColor Yellow
+        & minikube docker-env --shell powershell | Invoke-Expression
+        
+        # Verify Docker context
+        $dockerName = docker info --format "{{.Name}}" 2>&1
+        if ($dockerName -notmatch "minikube") {
+            Write-Host "  ERROR: Failed to switch to Minikube Docker" -ForegroundColor Red
+            Write-Host "  Current Docker: $dockerName" -ForegroundColor Yellow
+            return
+        }
+        Write-Host "  Docker context: $dockerName" -ForegroundColor Green
+        
+        # Build images
+        Write-Host "Building updated images..." -ForegroundColor Yellow
+        Set-Location $projectRoot
+        
+        Write-Host "  - Building customer-service image..." -ForegroundColor Gray
+        docker build -f docker/Dockerfile.customer_service -t fintegrate-customer-service:v1.0 . 2>&1 | Out-Null
+        if ($LASTEXITCODE -ne 0) {
+            Write-Host "    ERROR: Failed to build customer-service image" -ForegroundColor Red
+            return
+        }
+        
+        Write-Host "  - Building event-consumer image..." -ForegroundColor Gray
+        docker build -f docker/Dockerfile.event_consumer -t fintegrate-event-consumer:v1.0 . 2>&1 | Out-Null
+        if ($LASTEXITCODE -ne 0) {
+            Write-Host "    ERROR: Failed to build event-consumer image" -ForegroundColor Red
+            return
+        }
+        
+        Write-Host "  - Building aml_service image..." -ForegroundColor Gray
+        docker build -f docker/Dockerfile.aml_service -t aml_service:latest . 2>&1 | Out-Null
+        if ($LASTEXITCODE -ne 0) {
+            Write-Host "    ERROR: Failed to build aml_service image" -ForegroundColor Red
+            return
+        }
+        
+        # Update timestamp
+        $latestSourceTime.ToString('o') | Out-File $timestampFile -Force
+        Write-Host "  Build timestamp updated: $($latestSourceTime.ToString('yyyy-MM-dd HH:mm:ss'))" -ForegroundColor Green
+        
+        Set-Location (Join-Path $projectRoot "kubernetes")
+        Write-Host "Images rebuilt successfully!" -ForegroundColor Green
+    }
+    
+    # Always restart services to pick up new images (even if rebuilt)
+    Write-Host "Restarting services with updated images..." -ForegroundColor Yellow
+    
+    $statelessDeployments = @(
+        "customer-service",
+        "event-consumer-default", 
+        "event-consumer-swadia",
+        "event-consumer-test001",
+        "aml-service",
+        "traefik"
+    )
+    
+    foreach ($dep in $statelessDeployments) {
+        Write-Host "  - Restarting deployment: $dep" -ForegroundColor Gray
+        kubectl rollout restart deployment/$dep 2>&1 | Out-Null
+    }
+    
+    Write-Host "Waiting for pods to be ready..." -ForegroundColor Gray
+    kubectl wait --for=condition=ready pod -l app=customer-service --timeout=60s 2>&1 | Out-Null
+    
+    Write-Host "Service images updated and restarted successfully!" -ForegroundColor Green
+}
+
 # Main loop
 while ($true) {
     Show-Menu
@@ -694,6 +824,7 @@ while ($true) {
         "7" { Open-Dashboards; Read-Host "`nPress Enter to continue" }
         "8" { Run-Migrations; Read-Host "`nPress Enter to continue" }
         "9" { Show-ClusterStatus; Read-Host "`nPress Enter to continue" }
+        "10" { Update-ServiceImages; Read-Host "`nPress Enter to continue" }
         "q" { Write-Host "`nGoodbye!" -ForegroundColor Cyan; exit }
         "Q" { Write-Host "`nGoodbye!" -ForegroundColor Cyan; exit }
         default { Write-Host "`nInvalid option" -ForegroundColor Red; Start-Sleep -Seconds 1 }
