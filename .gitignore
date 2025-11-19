@@ -8,6 +8,10 @@ kubernetes/KUBERNETES_PRACTICE_SOLUTIONS.md
 kubernetes/secrets/*.yaml
 kubernetes/backups/
 sonar-issues.json
+CHANGELOG.md
+commit-and-push.ps1
+VERSION
+azure-pass.txt
 
 # Python
 __pycache__/
