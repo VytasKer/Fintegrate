@@ -52,11 +52,12 @@ RENAME TO idx_customer_analytics_customer_id;
 -- MIGRATION HISTORY RECORD
 -- ==================================================================
 
-INSERT INTO migration_history (revision_id, description, applied_at)
+INSERT INTO migration_history (revision_id, description, executed_at, executed_by)
 VALUES (
-    '20251024_1000',
+    '20251024_1000_update_customer_tags_and_analytics',
     'Add updated_at column to customer_tags and rename analytics_customers to customer_analytics',
-    CURRENT_TIMESTAMP
+    NOW(),
+    'system'
 );
 
 -- ==================================================================

@@ -25,4 +25,4 @@ COMMENT ON TRIGGER trg_prevent_consumer_name_update ON consumers IS
 
 -- Record migration execution
 INSERT INTO migration_history (revision_id, description, executed_at, executed_by)
-VALUES ('20251101_0900', 'Make consumer name immutable via trigger', NOW(), 'system');
+VALUES ('20251101_0900_consumer_name_immutable', 'Make consumer name immutable via trigger', NOW(), 'system');

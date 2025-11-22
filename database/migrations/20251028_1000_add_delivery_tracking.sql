@@ -46,3 +46,7 @@ COMMENT ON COLUMN customer_events.deliver_failure_reason IS 'Reason for delivery
 
 COMMENT ON TABLE consumer_event_receipts IS 'Tracks consumer acknowledgments for idempotency and audit';
 COMMENT ON COLUMN consumer_event_receipts.processing_status IS 'Consumer processing result: received/processed/failed';
+
+-- Record migration execution
+INSERT INTO migration_history (revision_id, description, executed_at, executed_by)
+VALUES ('20251028_1000_add_delivery_tracking', 'Add delivery tracking columns and consumer receipts table', NOW(), 'system');

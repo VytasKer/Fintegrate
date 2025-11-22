@@ -35,4 +35,4 @@ COMMENT ON COLUMN customer_events.failure_reason IS
 
 -- Record migration execution
 INSERT INTO migration_history (revision_id, description, executed_at, executed_by)
-VALUES ('20251027_0900', 'Add Transactional Outbox Pattern columns to customer_events table', NOW(), 'system');
+VALUES ('20251027_0900_add_outbox_columns', 'Add Transactional Outbox Pattern columns to customer_events table', NOW(), 'system');

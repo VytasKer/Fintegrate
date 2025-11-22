@@ -80,4 +80,4 @@ COMMENT ON COLUMN customer_events.consumer_id IS 'Target consumer for event deli
 
 -- Step 11: Record migration execution
 INSERT INTO migration_history (revision_id, description, executed_at, executed_by)
-VALUES ('20251031_0900', 'Add consumers and API keys', NOW(), 'system');
+VALUES ('20251031_0900_add_consumers_and_api_keys', 'Add consumers and API keys', NOW(), 'system');

@@ -26,8 +26,8 @@ ALTER TABLE customer_archive DROP CONSTRAINT IF EXISTS customer_archive_customer
 ALTER TABLE customer_tags DROP CONSTRAINT IF EXISTS customer_tags_customer_id_fkey;
 
 -- Record migration execution
-INSERT INTO migration_history (revision_id, description, executed_by)
-VALUES ('20251024_0900_remove_fk_constraints', 'Remove FK constraints for flexible data management', 'system')
+INSERT INTO migration_history (revision_id, description, executed_at, executed_by)
+VALUES ('20251024_0900_remove_fk_constraints', 'Remove FK constraints for flexible data management', NOW(), 'system')
 ON CONFLICT (revision_id) DO NOTHING;
 
 COMMIT;
