@@ -81,7 +81,7 @@ jobs:
           fi
       
       - name: Build and push customer-service
-        uses: docker/build-push-action@v5
+        uses: docker/build-push-action@v6
         with:
           context: .
           file: ./docker/Dockerfile.customer_service
@@ -91,7 +91,7 @@ jobs:
             ghcr.io/${{ github.repository_owner }}/fintegrate-customer-service:${{ steps.version.outputs.VERSION }}
       
       - name: Build and push event-consumer
-        uses: docker/build-push-action@v5
+        uses: docker/build-push-action@v6
         with:
           context: .
           file: ./docker/Dockerfile.event_consumer
