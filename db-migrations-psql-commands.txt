@@ -1,5 +1,4 @@
 psql "host=fintegrate-db-azure.postgres.database.azure.com port=5432 dbname=fintegrate_db user=fintegrate_login_azure password=postGr3-pass472583" -f 20251023_1630_init_schema.sql
-
 psql "host=fintegrate-db-azure.postgres.database.azure.com port=5432 dbname=fintegrate_db user=fintegrate_login_azure password=postGr3-pass472583" -f 20251024_0900_remove_fk_constraints.sql
 psql "host=fintegrate-db-azure.postgres.database.azure.com port=5432 dbname=fintegrate_db user=fintegrate_login_azure password=postGr3-pass472583" -f 20251024_1000_update_customer_tags_and_analytics.sql
 psql "host=fintegrate-db-azure.postgres.database.azure.com port=5432 dbname=fintegrate_db user=fintegrate_login_azure password=postGr3-pass472583" -f 20251024_1100_update_analytics_for_snapshots.sql
