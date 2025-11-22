@@ -43,7 +43,7 @@ jobs:
         uses: docker/setup-buildx-action@v3
       
       - name: Build customer-service image (test)
-        uses: docker/build-push-action@v5
+        uses: docker/build-push-action@v6
         with:
           context: .
           file: ./docker/Dockerfile.customer_service
@@ -82,7 +82,7 @@ jobs:
           echo "✅ customer-service container tests passed"
       
       - name: Build event-consumer image (test)
-        uses: docker/build-push-action@v5
+        uses: docker/build-push-action@v6
         with:
           context: .
           file: ./docker/Dockerfile.event_consumer
@@ -175,7 +175,7 @@ jobs:
       
       # Build and push customer-service image
       - name: Build and push customer-service
-        uses: docker/build-push-action@v5
+        uses: docker/build-push-action@v6
         with:
           context: .
           file: ./docker/Dockerfile.customer_service
@@ -187,7 +187,7 @@ jobs:
       
       # Build and push event-consumer image
       - name: Build and push event-consumer
-        uses: docker/build-push-action@v5
+        uses: docker/build-push-action@v6
         with:
           context: .
           file: ./docker/Dockerfile.event_consumer
@@ -199,7 +199,7 @@ jobs:
 
       # Build and push aml-service image
       - name: Build and push aml-service
-        uses: docker/build-push-action@v5
+        uses: docker/build-push-action@v6
         with:
           context: .
           file: ./docker/Dockerfile.aml_service
