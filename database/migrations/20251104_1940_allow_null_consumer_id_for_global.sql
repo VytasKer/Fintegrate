@@ -47,3 +47,11 @@ COMMIT;
 -- DROP INDEX IF EXISTS unique_global_snapshot;
 -- CREATE UNIQUE CONSTRAINT unique_consumer_snapshot UNIQUE (consumer_id, snapshot_timestamp);
 -- COMMIT;
+
+INSERT INTO migration_history (revision_id, description, executed_at, executed_by)
+VALUES (
+    '20251104_1940_allow_null_consumer_id_for_global',
+    'Allow NULL consumer_id in consumer_analytics for global snapshots and adjust unique constraints accordingly',
+    NOW(),
+    'system'
+);

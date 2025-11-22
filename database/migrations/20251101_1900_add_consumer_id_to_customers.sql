@@ -65,8 +65,8 @@ ALTER COLUMN consumer_id SET NOT NULL;
 CREATE INDEX idx_customer_analytics_consumer_id ON customer_analytics(consumer_id);
 
 -- Record migration
-INSERT INTO migration_history (revision_id, description, executed_by)
-VALUES ('20251101_1900_add_consumer_id_to_customers', 'Add consumer_id to customers, customer_tags, and customer_analytics for multi-tenant isolation', 'system');
+INSERT INTO migration_history (revision_id, description, executed_atexecuted_by)
+VALUES ('20251101_1900_add_consumer_id_to_customers', 'Add consumer_id to customers, customer_tags, and customer_analytics for multi-tenant isolation', NOW(), 'system');
 
 COMMIT;
 

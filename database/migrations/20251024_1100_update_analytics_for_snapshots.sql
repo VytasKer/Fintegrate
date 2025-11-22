@@ -35,11 +35,12 @@ CREATE INDEX idx_customer_analytics_snapshot_at ON customer_analytics(snapshot_a
 -- MIGRATION HISTORY RECORD
 -- ==================================================================
 
-INSERT INTO migration_history (revision_id, description, applied_at)
+INSERT INTO migration_history (revision_id, description, executed_at, executed_by)
 VALUES (
-    '20251024_1100',
+    '20251024_1100_update_analytics_for_snapshots',
     'Update customer_analytics to support multiple time-series snapshots per customer',
-    CURRENT_TIMESTAMP
+    NOW(),
+    'system'
 );
 
 -- ==================================================================

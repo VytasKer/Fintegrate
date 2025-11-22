@@ -97,8 +97,8 @@ CREATE INDEX IF NOT EXISTS idx_auditlog_timestamp ON audit_log(timestamp);
 CREATE INDEX IF NOT EXISTS idx_customer_archive_custid ON customer_archive(customer_id);
 
 -- Record migration execution
-INSERT INTO migration_history (revision_id, description, executed_by)
-VALUES ('20251023_1630_init_schema', 'Initial schema creation for Fintegrate project', 'system')
+INSERT INTO migration_history (revision_id, description, executed_at, executed_by)
+VALUES ('20251023_1630_init_schema', 'Initial schema creation for Fintegrate project', NOW(), 'system')
 ON CONFLICT (revision_id) DO NOTHING;
 
 COMMIT;

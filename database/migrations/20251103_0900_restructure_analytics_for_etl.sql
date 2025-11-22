@@ -93,9 +93,9 @@ COMMENT ON COLUMN etl_job_watermarks.last_run_status IS 'Status of last executio
 
 INSERT INTO migration_history (revision_id, description, executed_at, executed_by)
 VALUES (
-    '20251103_0900',
+    '20251103_0900_restructure_analytics_for_etl',
     'Restructure customer_analytics for consumer-level ETL aggregates and add watermark tracking',
-    CURRENT_TIMESTAMP,
+    NOW(),
     'system'
 );
 
