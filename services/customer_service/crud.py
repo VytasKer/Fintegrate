@@ -66,6 +66,31 @@ def get_customer(db: Session, customer_id: UUID, consumer_id: UUID | None = None
     return query.first()
 
 
+def get_customers_by_created_range(
+    db: Session, date_start_inclusive: str, date_end_exclusive: str, consumer_id: UUID | None = None
+) -> List[Customer] | None:
+    """
+    Retrieve customer list by creation date range.
+
+    Args:
+        db: Database session
+        date_start_inclusive: date range start date
+        date_end_exclusive: date range end date
+        consumer_id: Consumer UUID for ownership validation (required for security)
+
+    Returns:
+        Customers list if found, None otherwise
+    """
+    return (
+        db.query(Customer)
+        .filter(Customer.consumer_id == consumer_id)
+        .filter(Customer.created_at >= date_start_inclusive)
+        .filter(Customer.created_at < date_end_exclusive)
+        .order_by(Customer.created_at.desc())
+        .all()
+    )
+
+
 def delete_customer(db: Session, customer_id: UUID, consumer_id: UUID | None = None) -> bool:
     """
     Physically delete customer by ID.
@@ -181,6 +206,29 @@ def get_customer_tags(db: Session, customer_id: UUID, consumer_id: UUID | None =
         query = query.filter(CustomerTag.consumer_id == consumer_id)
 
     return query.all()
+
+
+def get_customer_tags_bulk(db: Session, customer_ids: list, consumer_id: UUID | None = None) -> List[CustomerTag]:
+    """
+    Retrieve customer tags list for a bulk of customers.
+
+    Args:
+        db: Database session
+        customer_ids: list of customer ids
+        consumer_id: Consumer UUID for ownership validation (required for security)
+
+    Returns:
+        Customers tags list if found, empty list otherwise
+    """
+    if not customer_ids:
+        return []
+
+    return (
+        db.query(CustomerTag)
+        .filter(CustomerTag.consumer_id == consumer_id)
+        .filter(CustomerTag.customer_id.in_(customer_ids))
+        .all()
+    )
 
 
 def delete_customer_tags(db: Session, customer_id: UUID, consumer_id: UUID | None = None) -> int:

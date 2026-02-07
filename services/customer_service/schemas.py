@@ -123,6 +123,13 @@ class CustomerGetStandardResponse(BaseModel):
     detail: Detail
 
 
+class CustomerGetFilteredResponse(BaseModel):
+    """Filtered response for GET /customer/data-filter"""
+
+    data: List[CustomerResponse]
+    detail: Detail
+
+
 class CustomerDeleteStandardResponse(BaseModel):
     """Standard response for DELETE /customer/data"""
 

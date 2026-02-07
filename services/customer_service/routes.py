@@ -30,6 +30,7 @@ from services.customer_service.schemas import (
     CustomerTagValueUpdate,
     CustomerCreateStandardResponse,
     CustomerGetStandardResponse,
+    CustomerGetFilteredResponse,
     CustomerDeleteStandardResponse,
     CustomerStatusChangeStandardResponse,
     CustomerTagStandardResponse,
@@ -55,6 +56,7 @@ from services.shared.response_handler import success_response, error_response
 from services.shared.audit_logger import log_error_to_audit
 from services.shared.event_publisher import get_event_publisher
 from services.customer_service.middleware import verify_api_key, rate_limit_middleware
+from datetime import date, time, UTC
 
 router = APIRouter()
 
@@ -276,6 +278,147 @@ def get_customer(
             entity="customer",
             entity_id=customer_id,
             action="get_customer",
+            error_response=error_resp,
+        )
+
+        return JSONResponse(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, content=error_resp)
+
+
+@router.get("/customer/data-filter", response_model=CustomerGetFilteredResponse)
+def get_customer_filter(
+    creation_date_from: str,
+    creation_date_to: str,
+    request: Request,
+    db: Session = Depends(get_db),
+    consumer=Depends(verify_api_key),
+    _=Depends(rate_limit_middleware),
+):
+    """
+    Retrieve a list of customers' information by creation date.
+
+    - **creation_date_from**: date of creation date from (query parameter)
+    - **creation_date_to**: date of creation date to (query parameter)
+
+    Returns: Standardized response with customer_id, name, status, created_at, updated_at, tags in a JSON list.
+
+    Requires: X-API-Key header with valid consumer API key
+    """
+
+    print(
+        f"[{INSTANCE_ID}] Processing GET /customer/data-filter - creation_date_from: "
+        f"{creation_date_from}, creation_date_to: {creation_date_to}"
+    )
+    print(f"[DEBUG] GET authenticated consumer: id={consumer.consumer_id}, name={consumer.name}")
+
+    try:
+        # Parse ISO 8601 date strings (YYYY-MM-DD) into date objects
+        date_from = date.fromisoformat(creation_date_from)
+        date_to = date.fromisoformat(creation_date_to)
+
+        # Build UTC datetime boundaries for a full-day range:
+        # start = beginning of the start date (00:00:00, inclusive) [start, end)
+        date_start_inclusive = datetime.combine(date_from, time.min, tzinfo=UTC)
+
+        # end = beginning of the next day (00:00:00, exclusive)
+        date_end_exclusive = datetime.combine(date_to + timedelta(days=1), time.min, tzinfo=UTC)
+
+        # Check if date_from is not later than date_to
+        if date_from > date_to:
+            error_resp = error_response(
+                status.HTTP_400_BAD_REQUEST, "Date value of creation_date_from cannot be later than creation_date_to"
+            )
+
+            # Log error to audit
+            log_error_to_audit(
+                db=db,
+                request=request,
+                entity="customer",
+                entity_id=consumer.consumer_id,
+                action="get_customer_by_filter",
+                error_response=error_resp,
+            )
+
+            return JSONResponse(status_code=status.HTTP_400_BAD_REQUEST, content=error_resp)
+
+        # Check if selected time period is not longer than 365 days. Control for data load
+        if (date_to - date_from).days > 365:
+            error_resp = error_response(status.HTTP_400_BAD_REQUEST, "Date difference cannot be longer than 365 days")
+
+            # Log error to audit
+            log_error_to_audit(
+                db=db,
+                request=request,
+                entity="customer",
+                entity_id=consumer.consumer_id,
+                action="get_customer_by_filter",
+                error_response=error_resp,
+            )
+
+            return JSONResponse(status_code=status.HTTP_400_BAD_REQUEST, content=error_resp)
+
+        # Get customers' data from db
+        db_customers = crud.get_customers_by_created_range(
+            db, date_start_inclusive, date_end_exclusive, consumer.consumer_id
+        )
+
+        # Extract customers' UUID from db_customers list
+        customers_ids = [customer.customer_id for customer in db_customers]
+
+        # Get customers' tags from db by customers list
+        db_tags = crud.get_customer_tags_bulk(db, customers_ids, consumer.consumer_id)
+
+        # Grouping tags by customer_id into dicts
+        tags_by_customer_id = {}
+
+        for tag in db_tags:
+            cust_id = tag.customer_id
+            if cust_id not in tags_by_customer_id:
+                tags_by_customer_id[cust_id] = {}
+            tags_by_customer_id[cust_id][str(tag.tag_key)] = tag.tag_value
+
+        # Form response payload
+        list_payload = [
+            CustomerResponse(
+                customer_id=customer.customer_id,
+                name=customer.name,
+                status=customer.status,
+                created_at=customer.created_at,
+                updated_at=customer.updated_at,
+                tags=tags_by_customer_id.get(customer.customer_id, {}),
+            ).model_dump()
+            for customer in db_customers
+        ]
+
+        # Return successful response
+        return success_response(list_payload, status.HTTP_200_OK)
+
+    except ValueError:
+        error_resp = error_response(
+            status.HTTP_400_BAD_REQUEST, "Invalid date format: ISO 8601 date string (YYYY-MM-DD) is expected"
+        )
+
+        # Log error to audit
+        log_error_to_audit(
+            db=db,
+            request=request,
+            entity="customer",
+            entity_id=consumer.consumer_id,
+            action="get_customer_by_filter",
+            error_response=error_resp,
+        )
+
+        return JSONResponse(status_code=status.HTTP_400_BAD_REQUEST, content=error_resp)
+
+    except Exception as e:
+        error_resp = error_response(status.HTTP_500_INTERNAL_SERVER_ERROR, f"Service failed: {str(e)}")
+
+        # Log error to audit
+        log_error_to_audit(
+            db=db,
+            request=request,
+            entity="customer",
+            entity_id=consumer.consumer_id,
+            action="get_customer_by_filter",
             error_response=error_resp,
         )
 
