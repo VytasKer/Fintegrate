@@ -103,7 +103,7 @@ spec:
           periodSeconds: 10
         readinessProbe:
           httpGet:
-            path: /events/health  # BROKEN: Wrong endpoint (should be /events/health) --FIXED
+            path: /events/health
             port: 8000
           initialDelaySeconds: 10
           periodSeconds: 5

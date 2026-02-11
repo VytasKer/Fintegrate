@@ -30,6 +30,7 @@ from services.customer_service.schemas import (
     CustomerTagValueUpdate,
     CustomerCreateStandardResponse,
     CustomerGetStandardResponse,
+    CustomerGetFilteredRequest,
     CustomerGetFilteredResponse,
     CustomerDeleteStandardResponse,
     CustomerStatusChangeStandardResponse,
@@ -286,9 +287,8 @@ def get_customer(
 
 @router.get("/customer/data-filter", response_model=CustomerGetFilteredResponse)
 def get_customer_filter(
-    creation_date_from: str,
-    creation_date_to: str,
     request: Request,
+    filters: CustomerGetFilteredRequest = Depends(),
     db: Session = Depends(get_db),
     consumer=Depends(verify_api_key),
     _=Depends(rate_limit_middleware),
@@ -304,17 +304,16 @@ def get_customer_filter(
     Requires: X-API-Key header with valid consumer API key
     """
 
+    date_from = filters.creation_date_from
+    date_to = filters.creation_date_to
+
     print(
         f"[{INSTANCE_ID}] Processing GET /customer/data-filter - creation_date_from: "
-        f"{creation_date_from}, creation_date_to: {creation_date_to}"
+        f"{date_from}, creation_date_to: {date_to}"
     )
     print(f"[DEBUG] GET authenticated consumer: id={consumer.consumer_id}, name={consumer.name}")
 
     try:
-        # Parse ISO 8601 date strings (YYYY-MM-DD) into date objects
-        date_from = date.fromisoformat(creation_date_from)
-        date_to = date.fromisoformat(creation_date_to)
-
         # Build UTC datetime boundaries for a full-day range:
         # start = beginning of the start date (00:00:00, inclusive) [start, end)
         date_start_inclusive = datetime.combine(date_from, time.min, tzinfo=UTC)
@@ -1880,7 +1879,6 @@ def get_analytics_snapshots(
         - Consumer sees only their own snapshots + global snapshots
         - Cannot query other consumers' data
     """
-    from datetime import date
     import math
 
     try:

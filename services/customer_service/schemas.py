@@ -2,6 +2,7 @@ from pydantic import BaseModel, Field
 from datetime import datetime
 from uuid import UUID
 from typing import Optional, Any, Dict, List
+from datetime import date
 
 
 class CustomerCreate(BaseModel):
@@ -121,6 +122,13 @@ class CustomerGetStandardResponse(BaseModel):
 
     data: CustomerResponse
     detail: Detail
+
+
+class CustomerGetFilteredRequest(BaseModel):
+    """Filtered request for GET /customer/data-filter"""
+
+    creation_date_from: date
+    creation_date_to: date
 
 
 class CustomerGetFilteredResponse(BaseModel):
