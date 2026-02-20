@@ -333,10 +333,11 @@ services:
   airflow-init:
     image: apache/airflow:2.7.3-python3.11
     container_name: fintegrate-airflow-init
+    env_file:
+      - ./airflow.secrets
     environment:
       AIRFLOW__CORE__EXECUTOR: LocalExecutor
       AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: postgresql+psycopg2://fintegrate_user:fintegrate_pass@postgres:5432/fintegrate_db
-      AIRFLOW__CORE__FERNET_KEY: 'YlCImzjge_TeZc9jFMdkNvD8gSGQj9dXeGA34Gf3OdM='  # Static key for development
       AIRFLOW__CORE__LOAD_EXAMPLES: 'false'
       AIRFLOW__WEBSERVER__SECRET_KEY: 'fintegrate_secret_key_dev'
       _AIRFLOW_DB_MIGRATE: 'true'
@@ -356,10 +357,11 @@ services:
   airflow-webserver:
     image: apache/airflow:2.7.3-python3.11
     container_name: fintegrate-airflow-webserver
+    env_file:
+      - ./airflow.secrets
     environment:
       AIRFLOW__CORE__EXECUTOR: LocalExecutor
       AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: postgresql+psycopg2://fintegrate_user:fintegrate_pass@postgres:5432/fintegrate_db
-      AIRFLOW__CORE__FERNET_KEY: 'YlCImzjge_TeZc9jFMdkNvD8gSGQj9dXeGA34Gf3OdM='
       AIRFLOW__CORE__LOAD_EXAMPLES: 'false'
       AIRFLOW__WEBSERVER__SECRET_KEY: 'fintegrate_secret_key_dev'
       # Email Configuration (Task 8: Monitoring & Logging)
@@ -402,10 +404,11 @@ services:
   airflow-scheduler:
     image: apache/airflow:2.7.3-python3.11
     container_name: fintegrate-airflow-scheduler
+    env_file:
+      - ./airflow.secrets
     environment:
       AIRFLOW__CORE__EXECUTOR: LocalExecutor
       AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: postgresql+psycopg2://fintegrate_user:fintegrate_pass@postgres:5432/fintegrate_db
-      AIRFLOW__CORE__FERNET_KEY: 'YlCImzjge_TeZc9jFMdkNvD8gSGQj9dXeGA34Gf3OdM='
       AIRFLOW__CORE__LOAD_EXAMPLES: 'false'
       AIRFLOW__WEBSERVER__SECRET_KEY: 'fintegrate_secret_key_dev'
       # Email Configuration (Task 8: Monitoring & Logging)

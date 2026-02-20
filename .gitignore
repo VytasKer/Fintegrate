@@ -51,6 +51,7 @@ Thumbs.db
 
 # Docker
 .dockerignore
+docker/airflow.secrets
 
 # Testing
 .pytest_cache/
