@@ -208,9 +208,10 @@ docker exec fintegrate-airflow-scheduler env | findstr SMTP
 # Test connection
 docker exec -it fintegrate-airflow-scheduler python -c "
 import smtplib
+import os
 server = smtplib.SMTP('smtp.gmail.com', 587)
 server.starttls()
-server.login('certalertnotifications@gmail.com', 'ktom tbcz dpih weda')
+server.login('certalertnotifications@gmail.com', os.getenv('AIRFLOW__SMTP__SMTP_PASSWORD'))
 print('SMTP OK')
 server.quit()
 "

@@ -5,6 +5,9 @@ version: '3.8'
 
 name: fintegrate
 
+x-env-file: &env_file
+  - ./docker.secrets
+
 services:
   # API Gateway
   traefik:
@@ -64,12 +67,13 @@ services:
       context: ..
       dockerfile: docker/Dockerfile.customer_service
     container_name: fintegrate-customer-service-1
+    env_file: *env_file
     environment:
-      DATABASE_URL: postgresql://fintegrate_user:fintegrate_pass@postgres:5432/fintegrate_db
+      DATABASE_URL: ${DATABASE_URL}
       RABBITMQ_HOST: rabbitmq
       RABBITMQ_PORT: 5672
-      RABBITMQ_USER: fintegrate_user
-      RABBITMQ_PASS: fintegrate_pass
+      RABBITMQ_USER: ${RABBITMQ_USER}
+      RABBITMQ_PASS: ${RABBITMQ_PASS}
       REDIS_HOST: redis
       REDIS_PORT: 6379
       # Rate limiting configuration (test-friendly values)
@@ -119,12 +123,13 @@ services:
       context: ..
       dockerfile: docker/Dockerfile.customer_service
     container_name: fintegrate-customer-service-2
+    env_file: *env_file
     environment:
-      DATABASE_URL: postgresql://fintegrate_user:fintegrate_pass@postgres:5432/fintegrate_db
+      DATABASE_URL: ${DATABASE_URL}
       RABBITMQ_HOST: rabbitmq
       RABBITMQ_PORT: 5672
-      RABBITMQ_USER: fintegrate_user
-      RABBITMQ_PASS: fintegrate_pass
+      RABBITMQ_USER: ${RABBITMQ_USER}
+      RABBITMQ_PASS: ${RABBITMQ_PASS}
       REDIS_HOST: redis
       REDIS_PORT: 6379
       # Rate limiting configuration (test-friendly values)
@@ -174,11 +179,12 @@ services:
       context: ..
       dockerfile: docker/Dockerfile.event_consumer
     container_name: fintegrate-event-consumer
+    env_file: *env_file
     environment:
       RABBITMQ_HOST: rabbitmq
       RABBITMQ_PORT: 5672
-      RABBITMQ_USER: fintegrate_user
-      RABBITMQ_PASS: fintegrate_pass
+      RABBITMQ_USER: ${RABBITMQ_USER}
+      RABBITMQ_PASS: ${RABBITMQ_PASS}
       CUSTOMER_SERVICE_URL: http://traefik:80
       CONSUMER_NAME: system_default
     depends_on:
@@ -203,11 +209,12 @@ services:
       context: ..
       dockerfile: docker/Dockerfile.event_consumer
     container_name: fintegrate-event-consumer-test001
+    env_file: *env_file
     environment:
       RABBITMQ_HOST: rabbitmq
       RABBITMQ_PORT: 5672
-      RABBITMQ_USER: fintegrate_user
-      RABBITMQ_PASS: fintegrate_pass
+      RABBITMQ_USER: ${RABBITMQ_USER}
+      RABBITMQ_PASS: ${RABBITMQ_PASS}
       CUSTOMER_SERVICE_URL: http://traefik:80
       CONSUMER_NAME: consumer_test001
     depends_on:
@@ -232,11 +239,12 @@ services:
       context: ..
       dockerfile: docker/Dockerfile.event_consumer
     container_name: fintegrate-event-consumer-swadia-bank
+    env_file: *env_file
     environment:
       RABBITMQ_HOST: rabbitmq
       RABBITMQ_PORT: 5672
-      RABBITMQ_USER: fintegrate_user
-      RABBITMQ_PASS: fintegrate_pass
+      RABBITMQ_USER: ${RABBITMQ_USER}
+      RABBITMQ_PASS: ${RABBITMQ_PASS}
       CUSTOMER_SERVICE_URL: http://traefik:80
       CONSUMER_NAME: consumer_swadia_bank
     depends_on:
@@ -261,12 +269,13 @@ services:
       context: ..
       dockerfile: docker/Dockerfile.aml_service
     container_name: fintegrate-aml-service
+    env_file: *env_file
     environment:
-      DATABASE_URL: postgresql://fintegrate_user:fintegrate_pass@postgres:5432/fintegrate_db
+      DATABASE_URL: ${DATABASE_URL}
       RABBITMQ_HOST: rabbitmq
       RABBITMQ_PORT: 5672
-      RABBITMQ_USER: fintegrate_user
-      RABBITMQ_PASS: fintegrate_pass
+      RABBITMQ_USER: ${RABBITMQ_USER}
+      RABBITMQ_PASS: ${RABBITMQ_PASS}
       SANCTIONS_DATA_DIR: /app/data/sanctions
     depends_on:
       - postgres
@@ -288,10 +297,11 @@ services:
   postgres:
     image: postgres:15-alpine
     container_name: fintegrate-postgres
+    env_file: *env_file
     environment:
-      POSTGRES_DB: fintegrate_db
-      POSTGRES_USER: fintegrate_user
-      POSTGRES_PASSWORD: fintegrate_pass
+      POSTGRES_DB: ${POSTGRES_DB}
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
     ports:
       - "5435:5432"
     volumes:
@@ -310,9 +320,10 @@ services:
   rabbitmq:
     image: rabbitmq:3.12-management-alpine
     container_name: fintegrate-rabbitmq
+    env_file: *env_file
     environment:
-      RABBITMQ_DEFAULT_USER: fintegrate_user
-      RABBITMQ_DEFAULT_PASS: fintegrate_pass
+      RABBITMQ_DEFAULT_USER: ${RABBITMQ_USER}
+      RABBITMQ_DEFAULT_PASS: ${RABBITMQ_PASS}
     ports:
       - "5672:5672"   # AMQP protocol
       - "15672:15672" # Management UI
@@ -333,17 +344,16 @@ services:
   airflow-init:
     image: apache/airflow:2.7.3-python3.11
     container_name: fintegrate-airflow-init
-    env_file:
-      - ./airflow.secrets
+    env_file: *env_file
     environment:
       AIRFLOW__CORE__EXECUTOR: LocalExecutor
-      AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: postgresql+psycopg2://fintegrate_user:fintegrate_pass@postgres:5432/fintegrate_db
+      AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: ${AIRFLOW__DATABASE__SQL_ALCHEMY_CONN}
       AIRFLOW__CORE__LOAD_EXAMPLES: 'false'
-      AIRFLOW__WEBSERVER__SECRET_KEY: 'fintegrate_secret_key_dev'
+      AIRFLOW__WEBSERVER__SECRET_KEY: ${AIRFLOW__WEBSERVER__SECRET_KEY}
       _AIRFLOW_DB_MIGRATE: 'true'
       _AIRFLOW_WWW_USER_CREATE: 'true'
-      _AIRFLOW_WWW_USER_USERNAME: 'admin'
-      _AIRFLOW_WWW_USER_PASSWORD: 'admin'
+      _AIRFLOW_WWW_USER_USERNAME: ${_AIRFLOW_WWW_USER_USERNAME}
+      _AIRFLOW_WWW_USER_PASSWORD: ${_AIRFLOW_WWW_USER_PASSWORD}
     volumes:
       - ../airflow/dags:/opt/airflow/dags
       - airflow_logs:/opt/airflow/logs
@@ -357,18 +367,17 @@ services:
   airflow-webserver:
     image: apache/airflow:2.7.3-python3.11
     container_name: fintegrate-airflow-webserver
-    env_file:
-      - ./airflow.secrets
+    env_file: *env_file
     environment:
       AIRFLOW__CORE__EXECUTOR: LocalExecutor
-      AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: postgresql+psycopg2://fintegrate_user:fintegrate_pass@postgres:5432/fintegrate_db
+      AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: ${AIRFLOW__DATABASE__SQL_ALCHEMY_CONN}
       AIRFLOW__CORE__LOAD_EXAMPLES: 'false'
-      AIRFLOW__WEBSERVER__SECRET_KEY: 'fintegrate_secret_key_dev'
+      AIRFLOW__WEBSERVER__SECRET_KEY: ${AIRFLOW__WEBSERVER__SECRET_KEY}
       # Email Configuration (Task 8: Monitoring & Logging)
       AIRFLOW__SMTP__SMTP_HOST: smtp.gmail.com
       AIRFLOW__SMTP__SMTP_PORT: 587
       AIRFLOW__SMTP__SMTP_USER: certalertnotifications@gmail.com
-      AIRFLOW__SMTP__SMTP_PASSWORD: ktom tbcz dpih weda
+      AIRFLOW__SMTP__SMTP_PASSWORD: ${AIRFLOW__SMTP__SMTP_PASSWORD}
       AIRFLOW__SMTP__SMTP_MAIL_FROM: certalertnotifications@gmail.com
       AIRFLOW__SMTP__SMTP_STARTTLS: 'true'
       AIRFLOW__SMTP__SMTP_SSL: 'false'
@@ -404,18 +413,17 @@ services:
   airflow-scheduler:
     image: apache/airflow:2.7.3-python3.11
     container_name: fintegrate-airflow-scheduler
-    env_file:
-      - ./airflow.secrets
+    env_file: *env_file
     environment:
       AIRFLOW__CORE__EXECUTOR: LocalExecutor
-      AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: postgresql+psycopg2://fintegrate_user:fintegrate_pass@postgres:5432/fintegrate_db
+      AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: ${AIRFLOW__DATABASE__SQL_ALCHEMY_CONN}
       AIRFLOW__CORE__LOAD_EXAMPLES: 'false'
-      AIRFLOW__WEBSERVER__SECRET_KEY: 'fintegrate_secret_key_dev'
+      AIRFLOW__WEBSERVER__SECRET_KEY: ${AIRFLOW__WEBSERVER__SECRET_KEY}
       # Email Configuration (Task 8: Monitoring & Logging)
       AIRFLOW__SMTP__SMTP_HOST: smtp.gmail.com
       AIRFLOW__SMTP__SMTP_PORT: 587
       AIRFLOW__SMTP__SMTP_USER: certalertnotifications@gmail.com
-      AIRFLOW__SMTP__SMTP_PASSWORD: ktom tbcz dpih weda
+      AIRFLOW__SMTP__SMTP_PASSWORD: ${AIRFLOW__SMTP__SMTP_PASSWORD}
       AIRFLOW__SMTP__SMTP_MAIL_FROM: certalertnotifications@gmail.com
       AIRFLOW__SMTP__SMTP_STARTTLS: 'true'
       AIRFLOW__SMTP__SMTP_SSL: 'false'
@@ -444,10 +452,11 @@ services:
   rabbitmq-exporter:
     image: kbudde/rabbitmq-exporter:latest
     container_name: fintegrate-rabbitmq-exporter
+    env_file: *env_file
     environment:
       RABBIT_URL: http://rabbitmq:15672
-      RABBIT_USER: fintegrate_user
-      RABBIT_PASSWORD: fintegrate_pass
+      RABBIT_USER: ${RABBITMQ_USER}
+      RABBIT_PASSWORD: ${RABBITMQ_PASS}
       PUBLISH_PORT: 9419
       OUTPUT_FORMAT: json
     ports:
@@ -462,8 +471,9 @@ services:
   postgres-exporter:
     image: prometheuscommunity/postgres-exporter:latest
     container_name: fintegrate-postgres-exporter
+    env_file: *env_file
     environment:
-      DATA_SOURCE_NAME: "postgresql://fintegrate_user:fintegrate_pass@postgres:5432/fintegrate_db?sslmode=disable"
+      DATA_SOURCE_NAME: ${POSTGRES_EXPORTER_DATA_SOURCE_NAME}
     ports:
       - "9187:9187"
     depends_on:
@@ -507,11 +517,12 @@ services:
   grafana:
     image: grafana/grafana:latest
     container_name: fintegrate-grafana
+    env_file: *env_file
     ports:
       - "3000:3000"
     environment:
       GF_SECURITY_ADMIN_USER: admin
-      GF_SECURITY_ADMIN_PASSWORD: fintegrate_admin
+      GF_SECURITY_ADMIN_PASSWORD: ${GF_SECURITY_ADMIN_PASSWORD}
       GF_INSTALL_PLUGINS: grafana-clock-panel,grafana-simple-json-datasource
       GF_PATHS_PROVISIONING: /etc/grafana/provisioning
     volumes:

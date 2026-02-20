@@ -102,7 +102,7 @@ function Start-Cluster {
     Write-Host "  RabbitMQ AMQP:   localhost:5673" -ForegroundColor White
     Write-Host "  PostgreSQL:      localhost:5436" -ForegroundColor White
     Write-Host "  Prometheus (K8s):http://localhost:9091" -ForegroundColor White
-    Write-Host "  Grafana (K8s):   http://localhost:3001 (admin/fintegrate_admin)" -ForegroundColor White
+    Write-Host "  Grafana (K8s):   http://localhost:3001 (admin/<set GF_SECURITY_ADMIN_PASSWORD>)" -ForegroundColor White
 }
 
 function Start-FullDeploy {
@@ -285,7 +285,7 @@ function Start-FullDeploy {
     Write-Host "  RabbitMQ AMQP:   localhost:5673" -ForegroundColor White
     Write-Host "  PostgreSQL:      localhost:5436" -ForegroundColor White
     Write-Host "  Prometheus (K8s):http://localhost:9091" -ForegroundColor White
-    Write-Host "  Grafana (K8s):   http://localhost:3001 (admin/fintegrate_admin)" -ForegroundColor White
+    Write-Host "  Grafana (K8s):   http://localhost:3001 (admin/<set GF_SECURITY_ADMIN_PASSWORD>)" -ForegroundColor White
 }
 
 function Restart-Services {
@@ -557,7 +557,7 @@ function Show-ClusterStatus {
         Write-Host "  RabbitMQ AMQP:   localhost:5673" -ForegroundColor Green
         Write-Host "  PostgreSQL:      localhost:5436" -ForegroundColor Green
         Write-Host "  Prometheus (K8s):http://localhost:9091" -ForegroundColor Green
-        Write-Host "  Grafana (K8s):   http://localhost:3001 (admin/fintegrate_admin)" -ForegroundColor Green
+        Write-Host "  Grafana (K8s):   http://localhost:3001 (admin/<set GF_SECURITY_ADMIN_PASSWORD>)" -ForegroundColor Green
     } else {
         Write-Host "  Port-forwards not running - URLs unavailable" -ForegroundColor Red
         Write-Host "  Run option 1 or 3 to start port-forwards" -ForegroundColor Yellow
@@ -604,7 +604,12 @@ function Run-Migrations {
             
             # Execute via kubectl exec (no psql client needed)
             Write-Host "  Executing migration via kubectl..." -ForegroundColor Gray
-            $env:PGPASSWORD = "fintegrate_pass"
+            $dbPassword = $env:FINTEGRATE_DB_PASSWORD
+            if (-not $dbPassword) {
+                Write-Host "ERROR: FINTEGRATE_DB_PASSWORD not set. Set it before running migrations." -ForegroundColor Red
+                return
+            }
+            $env:PGPASSWORD = $dbPassword
             $result = $sqlContent | kubectl exec -i postgres-0 -- psql -U fintegrate_user -d fintegrate_db 2>&1
             
             if ($LASTEXITCODE -eq 0) {
@@ -618,7 +623,12 @@ function Run-Migrations {
             Write-Host "Running all migrations in order..." -ForegroundColor Yellow
             
             $migrations = Get-ChildItem "$migrationsPath\*.sql" | Sort-Object Name
-            $env:PGPASSWORD = "fintegrate_pass"
+            $dbPassword = $env:FINTEGRATE_DB_PASSWORD
+            if (-not $dbPassword) {
+                Write-Host "ERROR: FINTEGRATE_DB_PASSWORD not set. Set it before running migrations." -ForegroundColor Red
+                return
+            }
+            $env:PGPASSWORD = $dbPassword
             
             foreach ($migration in $migrations) {
                 Write-Host "  Applying: $($migration.Name)" -ForegroundColor Gray
@@ -651,7 +661,12 @@ function Run-Migrations {
                 $sqlContent = Get-Content $selectedFile.FullName -Raw
                 
                 # Execute via kubectl exec (no psql client needed)
-                $env:PGPASSWORD = "fintegrate_pass"
+                $dbPassword = $env:FINTEGRATE_DB_PASSWORD
+                if (-not $dbPassword) {
+                    Write-Host "ERROR: FINTEGRATE_DB_PASSWORD not set. Set it before running migrations." -ForegroundColor Red
+                    return
+                }
+                $env:PGPASSWORD = $dbPassword
                 $result = $sqlContent | kubectl exec -i postgres-0 -- psql -U fintegrate_user -d fintegrate_db 2>&1
                 
                 if ($LASTEXITCODE -eq 0) {
@@ -675,7 +690,7 @@ function Run-Migrations {
             Write-Host "  Port:     5436" -ForegroundColor White
             Write-Host "  Database: fintegrate_db" -ForegroundColor White
             Write-Host "  User:     fintegrate_user" -ForegroundColor White
-            Write-Host "  Password: fintegrate_pass" -ForegroundColor White
+            Write-Host "  Password: <set FINTEGRATE_DB_PASSWORD>" -ForegroundColor White
             Write-Host ""
             Write-Host "Or execute via kubectl directly:" -ForegroundColor Cyan
             Write-Host "  kubectl exec -it postgres-0 -- psql -U fintegrate_user -d fintegrate_db" -ForegroundColor Gray

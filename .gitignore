@@ -12,6 +12,7 @@ CHANGELOG.md
 commit-and-push.ps1
 VERSION
 azure-pass.txt
+db-migrations-psql-commands.secrets.txt
 
 # Python
 __pycache__/
@@ -52,6 +53,7 @@ Thumbs.db
 # Docker
 .dockerignore
 docker/airflow.secrets
+docker/docker.secrets
 
 # Testing
 .pytest_cache/

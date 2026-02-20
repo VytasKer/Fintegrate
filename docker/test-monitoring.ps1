@@ -76,13 +76,13 @@ try {
 Write-Host ""
 Write-Host "=== Access URLs ===" -ForegroundColor Cyan
 Write-Host "  Prometheus UI:  http://localhost:9090" -ForegroundColor White
-Write-Host "  Grafana UI:     http://localhost:3000 (admin/fintegrate_admin)" -ForegroundColor White
+Write-Host "  Grafana UI:     http://localhost:3000 (admin/<set GF_SECURITY_ADMIN_PASSWORD>)" -ForegroundColor White
 Write-Host "  Metrics Export: http://localhost/metrics" -ForegroundColor White
 Write-Host ""
 Write-Host "[SUCCESS] Monitoring stack is operational!" -ForegroundColor Green
 Write-Host ""
 Write-Host "Next steps:" -ForegroundColor Yellow
 Write-Host "  1. Open Grafana at http://localhost:3000" -ForegroundColor White
-Write-Host "  2. Login with admin/fintegrate_admin" -ForegroundColor White
+Write-Host "  2. Login with admin/<set GF_SECURITY_ADMIN_PASSWORD>" -ForegroundColor White
 Write-Host "  3. Navigate to Dashboards -> Fintegrate Integration Metrics" -ForegroundColor White
 Write-Host "  4. Generate more traffic by creating customers via API" -ForegroundColor White

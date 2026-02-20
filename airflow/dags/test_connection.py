@@ -7,6 +7,7 @@ from datetime import datetime, timedelta
 from airflow import DAG
 from airflow.operators.python import PythonOperator
 import logging
+import os
 
 # Configure logger
 logger = logging.getLogger(__name__)
@@ -25,9 +26,19 @@ def test_database_connection():
     import psycopg2
 
     try:
+        db_host = os.getenv("POSTGRES_HOST", "postgres")
+        db_port = int(os.getenv("POSTGRES_PORT", "5432"))
+        db_name = os.getenv("POSTGRES_DB", "fintegrate_db")
+        db_user = os.getenv("POSTGRES_USER", "fintegrate_user")
+        db_password = os.getenv("POSTGRES_PASSWORD")
+
         # Connect to fintegrate database
         conn = psycopg2.connect(
-            host="postgres", port=5432, database="fintegrate_db", user="fintegrate_user", password="fintegrate_pass"
+            host=db_host,
+            port=db_port,
+            database=db_name,
+            user=db_user,
+            password=db_password,
         )
         cursor = conn.cursor()
 

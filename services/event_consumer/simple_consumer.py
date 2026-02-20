@@ -181,7 +181,7 @@ def main():
         rabbitmq_host = os.getenv("RABBITMQ_HOST", "localhost")
         rabbitmq_port = int(os.getenv("RABBITMQ_PORT", "5672"))
         rabbitmq_user = os.getenv("RABBITMQ_USER", "fintegrate_user")
-        rabbitmq_pass = os.getenv("RABBITMQ_PASS", "fintegrate_pass")
+        rabbitmq_pass = os.getenv("RABBITMQ_PASS")
         CUSTOMER_SERVICE_URL = os.getenv("CUSTOMER_SERVICE_URL", "http://localhost:8000")
 
         # Get consumer name for queue subscription (REQUIRED)

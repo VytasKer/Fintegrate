@@ -61,7 +61,7 @@ try {
     $minikubeIP = minikube ip
     Write-Host "  Minikube IP: $minikubeIP" -ForegroundColor Cyan
     Write-Host "  Prometheus UI: http://${minikubeIP}:30090" -ForegroundColor White
-    Write-Host "  Grafana UI:    http://${minikubeIP}:30300 (admin/fintegrate_admin)" -ForegroundColor White
+    Write-Host "  Grafana UI:    http://${minikubeIP}:30300 (admin/<set GF_SECURITY_ADMIN_PASSWORD>)" -ForegroundColor White
 } catch {
     Write-Host "  [FAIL] Could not get Minikube IP" -ForegroundColor Red
 }

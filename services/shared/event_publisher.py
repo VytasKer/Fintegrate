@@ -19,12 +19,14 @@ class EventPublisher:
         host: str = "localhost",
         port: int = 5672,
         username: str = "fintegrate_user",
-        password: str = "fintegrate_pass",
+        password: str | None = None,
     ):
         self.host = host
         self.port = port
-        self.username = username
-        self.password = password
+        self.username = username or os.getenv("RABBITMQ_USER", "fintegrate_user")
+        self.password = password or os.getenv("RABBITMQ_PASS")
+        if not self.password:
+            raise ValueError("RABBITMQ_PASS is not set. Provide it via env or constructor.")
         self.connection = None
         self.channel = None
 
@@ -177,11 +179,11 @@ def get_event_publisher() -> EventPublisher:
     """Get or create EventPublisher singleton with environment variable support."""
     global _publisher_instance
     if _publisher_instance is None:
-        # Use environment variables (Docker) or defaults (local)
+        # Use environment variables when available
         host = os.getenv("RABBITMQ_HOST", "localhost")
         port = int(os.getenv("RABBITMQ_PORT", "5672"))
         username = os.getenv("RABBITMQ_USER", "fintegrate_user")
-        password = os.getenv("RABBITMQ_PASS", "fintegrate_pass")
+        password = os.getenv("RABBITMQ_PASS")
 
         _publisher_instance = EventPublisher(host=host, port=port, username=username, password=password)
     return _publisher_instance
