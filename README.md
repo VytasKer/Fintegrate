@@ -8,9 +8,6 @@ Simulate a financial microservice ecosystem centered around customer management 
 ## Architecture
 Client (Postman) → Microservice (FastAPI) → Database (PostgreSQL) → Message Broker (RabbitMQ/Kafka) → API Gateway → Analytics (Airflow, Power BI) → Container Orchestration (Docker, Kubernetes)
 
-## Current Phase
-Phase 1: Foundation - Core API, DB, Logging
-
 ## Setup Instructions
 1. Install PostgreSQL and create database on port 5435
 2. Configure `.env` file with database credentials
